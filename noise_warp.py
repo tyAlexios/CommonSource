@@ -466,7 +466,9 @@ def get_noise_from_video(
 
         if "ffmpeg" in rp.get_system_commands():
             vis_mp4_path = rp.path_join(output_folder, "visualization_video.mp4")
+            noise_mp4_path = rp.path_join(output_folder, "noise_video.mp4")
             rp.save_video_mp4(vis_frames, vis_mp4_path, video_bitrate="max", framerate=30)
+            rp.save_video_mp4(numpy_noises/4+.5, noise_mp4_path, video_bitrate="max", framerate=30)
         else:
             rp.fansi_print("Please install ffmpeg! We won't save an MP4 this time - please try again.")
 
