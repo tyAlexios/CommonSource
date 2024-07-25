@@ -467,8 +467,18 @@ def get_noise_from_video(
         if "ffmpeg" in rp.get_system_commands():
             vis_mp4_path = rp.path_join(output_folder, "visualization_video.mp4")
             noise_mp4_path = rp.path_join(output_folder, "noise_video.mp4")
-            rp.save_video_mp4(vis_frames, vis_mp4_path, video_bitrate="max", framerate=30)
-            rp.save_video_mp4(np.stack(numpy_noises)/4+.5, noise_mp4_path, video_bitrate="max", framerate=30)
+            rp.save_video_mp4(
+                vis_frames,
+                vis_mp4_path,
+                video_bitrate="max",
+                framerate=30,
+            )
+            rp.save_video_mp4(
+                rearrange(np.stack(numpy_noises) / 4 + 0.5, "B C H W -> B H W C"),
+                noise_mp4_path,
+                video_bitrate="max",
+                framerate=30,
+            )
             if rp.is_video_file(video_path):
                 try:
                     #If possible, try to add the original audio and framerate back again
