@@ -468,7 +468,28 @@ def get_noise_from_video(
             vis_mp4_path = rp.path_join(output_folder, "visualization_video.mp4")
             noise_mp4_path = rp.path_join(output_folder, "noise_video.mp4")
             rp.save_video_mp4(vis_frames, vis_mp4_path, video_bitrate="max", framerate=30)
-            rp.save_video_mp4(numpy_noises/4+.5, noise_mp4_path, video_bitrate="max", framerate=30)
+            rp.save_video_mp4(np.stack(numpy_noises)/4+.5, noise_mp4_path, video_bitrate="max", framerate=30)
+            if rp.is_video_file(video_path):
+                try:
+                    #If possible, try to add the original audio and framerate back again
+                    #Only makes sense if the input was an MP4 file and not a folder of images etc
+                    for output_video_path in [vis_mp4_path, noise_mp4_path]:
+                        rp.fansi_print(
+                            "Added audio to output at: "
+                            + rp.add_audio_to_video_file(
+                                printed(
+                                    rp.change_video_file_framerate(
+                                        noise_mp4_path,
+                                        rp.get_video_file_framerate(video_path),
+                                    )
+                                ),
+                                video_path,
+                            ),
+                            "green",
+                            "bold",
+                        )
+                except Exception:
+                    rp.print_stack_trace()
         else:
             rp.fansi_print("Please install ffmpeg! We won't save an MP4 this time - please try again.")
 
