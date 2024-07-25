@@ -487,9 +487,9 @@ def get_noise_from_video(
                         rp.fansi_print(
                             "Added audio to output at: "
                             + rp.add_audio_to_video_file(
-                                printed(
+                                rp.printed(
                                     rp.change_video_file_framerate(
-                                        noise_mp4_path,
+                                        output_video_path,
                                         rp.get_video_file_framerate(video_path),
                                     )
                                 ),
