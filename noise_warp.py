@@ -307,6 +307,7 @@ def get_noise_from_video(
     visualize: bool = True,
     resize_frames: tuple = None,
     downscale_factor: int = 1,
+    device=None,
 ):
     """
     Extract noise from a video by warping random noise using optical flow between consecutive frames.
@@ -353,7 +354,8 @@ def get_noise_from_video(
         video_demo("/root/CleanCode/Projects/flow_noise_warping/outputs/kevin_spinner/kevin_vps7.mp4", downscale_factor=4, resize_frames=.5)
     """
 
-    device = rp.select_torch_device(prefer_used=True)
+    if device is None:
+        device = rp.select_torch_device(prefer_used=True)
     
     raft_model = raft.RaftOpticalFlow(device, "large")
 
