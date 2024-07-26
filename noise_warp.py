@@ -324,9 +324,9 @@ def get_noise_from_video(
         resize_frames (tuple or float, optional): Size to resize the input frames.
                                                   If a tuple (height, width), resizes to the exact dimensions.
                                                   If a float, resizes both dimensions relatively and evenly. Defaults to None.
-        downscale_factor (int or tuple, optional): Factor(s) by which to downscale the generated noise.
-                                                   Larger factor --> smaller noise image.
-                                                   This factor should evenly divide the height and width of the video frames.
+        downscale_factor (int): Factor by which to downscale the generated noise.
+                                Larger factor --> smaller noise image.
+                                This factor should evenly divide the height and width of the video frames.
 
     Returns:
         tuple: A tuple containing:
@@ -346,7 +346,7 @@ def get_noise_from_video(
             output_folder="/path/to/output",
             visualize=True,
             resize_frames=0.5,
-            downscale_factor=(2, 4),
+            downscale_factor=2,
         )
         video_demo("/root/CleanCode/Projects/flow_noise_warping/outputs/water/waves_bilinear.mp4", downscale_factor=4)
         video_demo("/efs/users/ryan.burgert/public/sharing/KevinSpinnerNoiseWarping/diffuse_images_360", downscale_factor=8, resize_frames=.5)
@@ -373,7 +373,7 @@ def get_noise_from_video(
 
     #If resize_frames is specified, resize all frames to that (height, width)
     if resize_frames is not None:
-        rp.fansi_print("Resizing all input frames to size %s"%resize_frames, 'yellow')
+        rp.fansi_print("Resizing all input frames to size %s"%str(resize_frames), 'yellow')
         video_frames=rp.resize_images(video_frames, size=resize_frames, interp='area')
         
     video_frames = rp.as_rgb_images(video_frames)
@@ -405,6 +405,7 @@ def get_noise_from_video(
         numpy_noise = rp.as_numpy_array(down_noise).astype(np.float16)
 
         numpy_noises = [numpy_noise]
+        numpy_flows = []
         vis_frames = []
 
         try:
@@ -413,6 +414,14 @@ def get_noise_from_video(
                 dx, dy = raft_model(prev_video_frame, video_frame)
                 noise = warp_noise(noise, -dx, -dy)
                 prev_video_frame = video_frame
+
+                numpy_flow = np.stack(
+                    [
+                        rp.as_numpy_array(dx).astype(np.float16),
+                        rp.as_numpy_array(dy).astype(np.float16),
+                    ]
+                )
+                numpy_flows.append(numpy_flow)
 
                 down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
                 down_noise = down_noise * downscale_factor #Adjust for STD
@@ -504,9 +513,13 @@ def get_noise_from_video(
             rp.fansi_print("Please install ffmpeg! We won't save an MP4 this time - please try again.")
 
     numpy_noises = np.stack(numpy_noises).astype(np.float16)
+    numpy_flows = np.stack(numpy_flows).astype(np.float16)
     noises_path = rp.path_join(output_folder, "noises.npy")
+    flows_path = rp.path_join(output_folder, "flows_dxdy.npy")
     np.save(noises_path, numpy_noises)
     rp.fansi_print("Saved " + noises_path + " with shape " + str(numpy_noises.shape), "green")
+    np.save(flows_path, numpy_flows)
+    rp.fansi_print("Saved " + flows_path + " with shape " + str(numpy_flows.shape), "green")
     
     rp.fansi_print(rp.get_file_name(__file__)+": Done warping noise, results are at " + rp.get_absolute_path(output_folder), "green", "bold")
 
