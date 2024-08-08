@@ -308,6 +308,7 @@ def get_noise_from_video(
     resize_frames: tuple = None,
     downscale_factor: int = 1,
     device=None,
+    video_preprocessor = None,
 ):
     """
     Extract noise from a video by warping random noise using optical flow between consecutive frames.
@@ -328,6 +329,9 @@ def get_noise_from_video(
         downscale_factor (int): Factor by which to downscale the generated noise.
                                 Larger factor --> smaller noise image.
                                 This factor should evenly divide the height and width of the video frames.
+        video_preprocessor (callable): A function that takes a THW3 RGB uint8 video numpy array, and returns another THW3 numpy array
+                                       This can be used for removing watermarks or resizing the video or any other preprocessing steps
+                                       This is applied to the input video, directly after loading it from video_path
 
     Returns:
         tuple: A tuple containing:
@@ -372,6 +376,11 @@ def get_noise_from_video(
             if not frame_paths:
                 raise ValueError(video_path + " is not a video file, a folder of images, or a glob containing images")
         video_frames = rp.load_images(frame_paths, show_progress=True)
+
+    if video_preprocessor is not None:
+        assert callable(video_preprocessor)
+        video_frames = rp.as_numpy_array(video_frames)
+        video_frames = video_preprocessor(video_frames)
 
     #If resize_frames is specified, resize all frames to that (height, width)
     if resize_frames is not None:
