@@ -228,7 +228,7 @@ def warp_noise(noise, dx, dy, s=4):
     assert up_noise.shape == (c, hs, ws)
     
     # Regaussianize the noise
-    output = regaussianize(up_noise)
+    output, _ = regaussianize(up_noise)
 
     #Now we resample the noise back down again
     output = rp.torch_resize_image(output, (h, w), interp='area')
@@ -272,7 +272,9 @@ def regaussianize(noise):
     output = output / counts_image ** .5
     output = output + zeroed_foreign_noise
 
-    return output
+    assert output.shape == noise.shape == (c, hs, ws)
+
+    return output, counts_image
     
 def demo_noise_warp():
     #Run this in a Jupyter notebook and watch the noise go brrrrrrr
