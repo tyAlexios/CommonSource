@@ -496,7 +496,7 @@ def get_noise_from_video(
                 framerate=30,
             )
             rp.save_video_mp4(
-                rearrange(np.stack(numpy_noises) / 4 + 0.5, "B C H W -> B H W C"),
+                rearrange(np.stack(numpy_noises) / 4 + 0.5, "B C H W -> B H W C")[:,:,:,:3],
                 noise_mp4_path,
                 video_bitrate="max",
                 framerate=30,
