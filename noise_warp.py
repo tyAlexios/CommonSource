@@ -303,6 +303,239 @@ def demo_noise_warp():
         # rp.display_image(new_noise)
         d.update(rp.as_numpy_image(new_noise/4+.5))
 
+def demo_webcam_noise_warp():
+    import cv2
+    import numpy as np
+    from rp import (
+        as_numpy_image,
+        cv_bgr_rgb_swap,
+        display_image,
+        get_image_dimensions,
+        rp,
+        tiled_images,
+    )
+
+    def draw_hsv(flow, scale=8):
+        h, w = flow.shape[:2]
+        hsv = np.zeros((h, w, 3), dtype=np.uint8)
+        mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+        hsv[..., 0] = ang * 180 / np.pi / 2
+        hsv[..., 1] = 255
+        scaled_mag = mag * scale
+        scaled_mag = np.clip(scaled_mag, 0, 255)  # Ensure it fits in the value range
+        hsv[..., 2] = scaled_mag.astype(np.uint8)
+        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        return bgr
+
+    def resize_frame(frame, target_height=128):
+        aspect_ratio = frame.shape[1] / frame.shape[0]
+        target_width = int(target_height * aspect_ratio)
+        resized_frame = cv2.resize(frame, (target_width, target_height))
+        print(resized_frame.shape)
+        return resized_frame
+
+    def main():
+        cap = cv2.VideoCapture(0)
+        ret, prev_frame = cap.read()
+        prev_frame = resize_frame(prev_frame)
+        prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+
+        # Initialize DeepFlow Optical Flow
+        optical_flow = cv2.optflow.createOptFlow_DeepFlow()
+
+        d = rp.JupyterDisplayChannel()
+        d.display()
+        device = "cpu"
+        h, w = get_image_dimensions(prev_frame)
+        noise = torch.randn(3, h, w).to(device)
+        wdx, wdy = calculate_wave_pattern(h, w, frame=0)
+        sdx, sdy = starfield_zoom(h, w, frame=1)
+
+        dx = sdx + 2 * wdx
+        dy = sdy + 2 * wdy
+
+        dx /= dx.max()
+        dy /= dy.max()
+        Q = -6
+        dy *= Q
+        dx *= Q
+        dx = dx.to(device)
+        dy = dy.to(device)
+        new_noise = noise
+
+        while True:
+            ret, frame = cap.read()
+            frame = resize_frame(frame)
+            frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # Compute the optical flow
+            flow = optical_flow.calc(prev_gray, frame_gray, None)
+
+            # Visualization
+            flow_bgr = draw_hsv(flow)
+
+            x = flow[:, :, 0]
+            y = flow[:, :, 1]
+
+            dx = -torch.Tensor(x)
+            dy = -torch.Tensor(y)
+
+            # Display the original and flow side by side
+            combined_img = np.hstack((frame, flow_bgr))
+            cv2.imshow("Frame and Optical Flow", combined_img)
+
+            prev_gray = frame_gray.copy()
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+            new_noise = warp_noise(new_noise, dx, dy, 1)
+            display_image(
+                tiled_images(
+                    [
+                        as_numpy_image(new_noise / 2 + 0.5),
+                        cv_bgr_rgb_swap(frame),
+                        cv_bgr_rgb_swap(flow_bgr),
+                    ]
+                )
+            )
+
+            # d.update(rp.as_numpy_image(new_noise/4+.5))
+
+        cap.release()
+        cv2.destroyAllWindows()
+
+    main()
+
+
+
+
+def xy_meshgrid_like_image(image):
+    """
+    Example:
+        >>> image=load_image('https://picsum.photos/id/28/367/267')
+        ... image=as_torch_image(image)
+        ... xy=xy_meshgrid_like_image(image)
+        ... display_image(full_range(as_numpy_array(xy[0])))
+        ... display_image(full_range(as_numpy_array(xy[1])))
+    """
+    assert image.ndim == 3, "image is in CHW form"
+    c, h, w = image.shape
+
+    y, x = torch.meshgrid(
+        torch.arange(h),
+        torch.arange(w),
+    )
+
+    output = torch.stack(
+        [x, y],
+    ).to(image.device, image.dtype)
+
+    assert output.shape == (2, h, w)
+    return output
+
+
+def noise_to_xyωc(noise):
+    assert noise.ndim == 3, "noise is in CHW form"
+    zeros=torch.zeros_like(noise[0])
+    ones =torch.ones_like (noise[0])
+
+    #Prepend [dx=0, dy=0, weights=1] channels
+    output=torch.concat([zeros, zeros, ones, noise])
+    return output
+
+def xyωc_to_noise(xyωc):
+    assert xyωc.ndim == 3, "xyωc is in [ω x y c]·h·w form"
+    assert xyωc.shape[0]>3, 'xyωc should have at least one noise channel'
+    noise=xyωc[3:]
+    return noise
+
+def noise_warp_xyωc(I, F):
+    #Input assertions
+    assert F.device==I.device
+    assert F.ndim==2, 'F stands for flow, and its in [x y]·h·w form'
+    assert I.ndim==3, 'I stands for input, in [ω x y c]·h·w form where ω=weights, x and y are offsets, and c is num noise channels'
+    xyωc, h, w = I.shape
+    assert F.shape==(2,h,w) # Should be [x y]·h·w
+    device=I.device
+    
+    #How I'm going to address the different channels:
+    x   = 0        #          // index of Δx channel
+    y   = 1        #          // index of Δy channel
+    xy  = 2        # I[:xy]
+    xyω = 3        # I[:xyω]
+    ω   = 2        # I[ω]     // index of weight channel
+    c   = xyωc-xyω # I[-c:]   // num noise channels
+    ωc  = xyωc-xy  # I[-ωc:]
+    h_dim = 1
+    w_dim = 2
+    assert c, 'I has no noise channels. There is nothing to warp.'
+    assert (I[ω]>0).all(), 'All weights should be greater than 0'
+
+    #Compute the grid of xy indices
+    grid = xy_meshgrid_like_image(I)
+    assert grid.shape==(2,h,w) # Shape is [x y]·h·w
+
+    #The default values we initialize to. Todo: cache this.
+    init = torch.empty_like(I)
+    init[:xy]=0
+    init[ω]=1
+    init[c:]=0
+
+    #Caluclate initial pre-expand
+    pre_expand = torch.empty_like(I)
+    pre_expand[:xy] = init[:xy]
+    pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp="nearest")
+
+    #Calculate initial pre-shrink
+    pre_shrink = I.copy()
+    pre_shrink[:xy] += F
+
+    #Pre-Shrink mask - discard out-of-bounds pixels
+    pos = (grid + pre_shrink).round()
+    in_bounds = (0<= pos[x] < w) & (0<= pos[y] < w)
+    in_bounds = in_bounds[None] #Make the matrix an image tensor
+    out_of_bounds = ~in_bounds
+    assert out_of_bounds.shape==(1,h,w)
+    pre_shrink[ out_of_bounds ] = init
+
+    #Deal with shrink positions offsets
+    scat_xy = pre_shrink[:xy].round()
+    pre_shrink[:xy] -= scat_xy
+    scat = lambda tensor: rp.torch_scatter_add_image(tensor, *scat_xy, relative=True)
+
+    #Where mask==True, we output shrink. Where mask==0, we output expand.
+    shrink_mask = torch.ones(1,h,w,dtype=bool,device=device) #The purpose is to get zeroes where no element is used
+    shrink_mask = scat(shrink_mask)
+    assert shrink_mask.dtype==torch.bool, 'If this fails we gotta convert it with mask.=astype(bool)'
+
+    #Remove the expansion points where we'll use shrink
+    pre_expand[shrink_mask] = init
+
+    #Horizontally Concat
+    concat_dim = w_dim
+    concat     = torch.concat([pre_shrink, pre_expand], dim=concat_dim)
+
+    #Regaussianize
+    concat[-c:], counts_image = regaussianize(concat[-c:])
+    assert  counts_image.shape == (1, h, w)
+
+    #Distribute Weights
+    concat[ω] /= counts_image[0]
+    # concat[ω] = concat[ω].nan_to_num() #We shouldn't need this, this is a crutch. Final mask should take care of this.
+
+    pre_shrink, expand = torch.chunk(concat, chunks=2, dim=concat_dim)
+    assert pre_shrink.shape == pre_expand.shape == I.shape
+ 
+    shrink = torch.empty_like(pre_shrink)
+    shrink[ω]   = scat(pre_shrink[ω][None])[0]
+    shrink[:xy] = scat(pre_shrink[:xy]*pre_shrink[ω][None]) / shrink[ω][None]
+    shrink[-c:] = scat(pre_shrink[-c:]*pre_shrink[ω][None]) / scat(pre_shrink[ω][None]**2).sqrt()
+
+    output = torch.where(shrink_mask, shrink, expand)
+
+    torch.where()
+
 def get_noise_from_video(
     video_path: str,
     noise_channels: int = 3,
