@@ -1,7 +1,49 @@
 import torch
 import rp
 from .noise_warp import *
-def noise_warp_wxyc(I, F):
+
+
+def xy_meshgrid_like_image(image):
+    """
+    Example:
+        >>> image=load_image('https://picsum.photos/id/28/367/267')
+        ... image=as_torch_image(image)
+        ... xy=xy_meshgrid_like_image(image)
+        ... display_image(full_range(as_numpy_array(xy[0])))
+        ... display_image(full_range(as_numpy_array(xy[1])))
+    """
+    assert image.ndim == 3, "image is in CHW form"
+    c, h, w = image.shape
+
+    y, x = torch.meshgrid(
+        torch.arange(h),
+        torch.arange(w),
+    )
+
+    output = torch.stack(
+        [x, y],
+    ).to(image.device, image.dtype)
+
+    assert output.shape == (2, h, w)
+    return output
+
+
+def noise_to_xyωc(noise):
+    assert noise.ndim == 3, "noise is in CHW form"
+    zeros=torch.zeros_like(noise[0])
+    ones =torch.ones_like (noise[0])
+
+    #Prepend [dx=0, dy=0, weights=1] channels
+    output=torch.concat([zeros, zeros, ones, noise])
+    return output
+
+def xyωc_to_noise(xyωc):
+    assert xyωc.ndim == 3, "xyωc is in [ω x y c]·h·w form"
+    assert xyωc.shape[0]>3, 'xyωc should have at least one noise channel'
+    noise=xyωc[3:]
+    return noise
+
+def noise_warp_xyωc(I, F):
     #Input assertions
     assert F.device==I.device
     assert F.ndim==2, 'F stands for flow, and its in [x y]·h·w form'
@@ -23,9 +65,9 @@ def noise_warp_wxyc(I, F):
     assert c, 'I has no noise channels. There is nothing to warp.'
     assert (I[ω]>0).all(), 'All weights should be greater than 0'
 
-    #Compute the grid. Todo: cache this.
-    grid = torch.stack(torch.meshgrid(torch.arange(h),torch.arange(w))).to(device)
-    # assert grid.shape==(2,h,w) # Shape is [x y]·h·w #COMMENTED SO I CAN SEE IF I EVEN USE IT
+    #Compute the grid of xy indices
+    grid = xy_meshgrid_like_image(I)
+    assert grid.shape==(2,h,w) # Shape is [x y]·h·w
 
     #The default values we initialize to. Todo: cache this.
     init = torch.empty_like(I)
@@ -43,15 +85,17 @@ def noise_warp_wxyc(I, F):
     pre_shrink[:xy] += F
 
     #Pre-Shrink mask - discard out-of-bounds pixels
-    wh = torch.tensor([w,h]).to(device)
-    in_bounds = 0<= pre_shrink[:xy] < wh
+    pos = (grid + pre_shrink).round()
+    in_bounds = (0<= pos[x] < w) & (0<= pos[y] < w)
+    in_bounds = in_bounds[None] #Make the matrix an image tensor
     out_of_bounds = ~in_bounds
+    assert out_of_bounds.shape==(1,h,w)
     pre_shrink[ out_of_bounds ] = init
 
     #Deal with shrink positions offsets
     scat_xy = pre_shrink[:xy].round()
     pre_shrink[:xy] -= scat_xy
-    scat = lambda tensor: rp.torch_scatter_add_image(tensor, *scat_xy, relative=True, interp='round')
+    scat = lambda tensor: rp.torch_scatter_add_image(tensor, *scat_xy, relative=True)
 
     #Where mask==True, we output shrink. Where mask==0, we output expand.
     shrink_mask = torch.ones(1,h,w,dtype=bool,device=device) #The purpose is to get zeroes where no element is used
@@ -82,3 +126,5 @@ def noise_warp_wxyc(I, F):
     shrink[-c:] = scat(pre_shrink[-c:]*pre_shrink[ω][None]) / scat(pre_shrink[ω][None]**2).sqrt()
 
     output = torch.where(shrink_mask, shrink, expand)
+
+    torch.where()
