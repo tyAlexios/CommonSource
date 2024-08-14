@@ -327,7 +327,7 @@ def demo_webcam_noise_warp():
         bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
         return bgr
 
-    def resize_frame(frame, target_height=128):
+    def resize_frame(frame, target_height=64):
         aspect_ratio = frame.shape[1] / frame.shape[0]
         target_width = int(target_height * aspect_ratio)
         resized_frame = cv2.resize(frame, (target_width, target_height))
@@ -493,7 +493,7 @@ def warp_xyωc(I, F):
     pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp="nearest")
     pre_expand[ω][pre_expand[ω]==0]=1 #Give new noise regions a weight of 1 - effectively setting it to init there
 
-    #pre_expand[-c:]=regaussianize(pre_expand[-c:])[0] ; return pre_expand #DEBUG - Uncomment to preview expansion-only noise warping
+    # pre_expand[-c:]=regaussianize(pre_expand[-c:])[0] ; return pre_expand #DEBUG - Uncomment to preview expansion-only noise warping
 
     #Calculate initial pre-shrink
     pre_shrink = I.clone()
@@ -512,6 +512,15 @@ def warp_xyωc(I, F):
     #Deal with shrink positions offsets
     scat_xy = pre_shrink[:xy].round()
     pre_shrink[:xy] -= scat_xy
+
+    #FLOATING POINT POSITIONS: I will disable this for now. It does in fact increase sensitivity! But it also makes it less long-term coherent
+    pre_shrink[:xy] = 0 #DEBUG: Uncomment to ablate floating-point swarm positions
+    #OTHER ways I tried reducing sensitivity to motion. They work - but 0 is best. Let's just use high resolution.
+    # pre_shrink[:xy][pre_shrink[:xy].abs()<.1] = 0  #DEBUG: Uncomment to ablate floating-point swarm positions
+    # pre_shrink[:xy] *= -1 #I can't even tell that this is wrong.....
+    # sensitivity_factor = 4
+    # pre_shrink[:xy] = (pre_shrink[:xy]*4).round()/4  #DEBUG: Uncomment to ablate floating-point swarm positions
+
     scat = lambda tensor: rp.torch_scatter_add_image(tensor, *scat_xy, relative=True)
 
     #Where mask==True, we output shrink. Where mask==0, we output expand.
@@ -523,7 +532,7 @@ def warp_xyωc(I, F):
 
     #Remove the expansion points where we'll use shrink
     pre_expand = torch.where(shrink_mask, init, pre_expand)
-    rp.cv_imshow(pre_expand[-c:]/5+.5,'preex')
+    # rp.cv_imshow(pre_expand[-c:]/5+.5,'preex')
 
     #Horizontally Concat
     concat_dim = w_dim
@@ -547,16 +556,24 @@ def warp_xyωc(I, F):
     shrink[-c:] = scat(pre_shrink[-c:]*pre_shrink[ω][None]) / scat(pre_shrink[ω][None]**2).sqrt()
 
     output = torch.where(shrink_mask, shrink, expand)
-    # rp.debug_comment([output[ω].min(), output[ω].max()])# --> [tensor(9.5508e-08), tensor(3.6668e-05)]
-    # rp.debug_comment([shrink[ω].min(), shrink[ω].max()])# --> [tensor(1.5264e-06), tensor(12.5988)]
-    # rp.debug_comment([expand[ω].min(), expand[ω].max()])# --> [tensor(0.), tensor(12.5988)]
-# --> [tensor(1.5264e-06), tensor(2.6586)]
+    # rp.debug_comment([output[ω].min(),output[ω].max()])# --> [tensor(0.0010), tensor(2.7004)]
+    # rp.debug_comment([shrink[ω].min(),shrink[ω].max()])# --> [tensor(0.), tensor(2.7004)]
+    # rp.debug_comment([expand[ω].min(),expand[ω].max()])# --> [tensor(0.0001), tensor(0.3892)]
     assert (output[ω]>0).all()
 
     output[ω] **= .99 #Make it tend towards 1
 
 
     return output
+
+
+class NoiseWarper:
+    def __init__(self,  c, h, w, device=None, dtype=None):
+        noise = torch.randn(c, h, w)
+
+        self.xyωc = 
+
+        
 
 def get_noise_from_video(
     video_path: str,
