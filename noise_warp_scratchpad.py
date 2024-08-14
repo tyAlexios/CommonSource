@@ -25,7 +25,7 @@ def noise_warp_wxyc(I, F):
 
     #Compute the grid. Todo: cache this.
     grid = torch.stack(torch.meshgrid(torch.arange(h),torch.arange(w))).to(device)
-    assert grid.shape==(2,h,w) # Shape is [x y]·h·w
+    # assert grid.shape==(2,h,w) # Shape is [x y]·h·w #COMMENTED SO I CAN SEE IF I EVEN USE IT
 
     #The default values we initialize to. Todo: cache this.
     init = torch.empty_like(I)
@@ -33,94 +33,52 @@ def noise_warp_wxyc(I, F):
     init[ω]=1
     init[c:]=0
 
-    #Caluclate pre-expand
+    #Caluclate initial pre-expand
     pre_expand = torch.empty_like(I)
     pre_expand[:xy] = init[:xy]
     pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp="nearest")
 
-    #Calculate pre-shrink
+    #Calculate initial pre-shrink
     pre_shrink = I.copy()
     pre_shrink[:xy] += F
+
     #Pre-Shrink mask - discard out-of-bounds pixels
     wh = torch.tensor([w,h]).to(device)
-    in_bounds  = pre_shrink[:xy] >= 0
-    in_bounds &= pre_shrink[:xy] <  wh
-    pre_shrink[in_bounds] = init
+    in_bounds = 0<= pre_shrink[:xy] < wh
+    out_of_bounds = ~in_bounds
+    pre_shrink[ out_of_bounds ] = init
+
+    #Deal with shrink positions offsets
+    scat_xy = pre_shrink[:xy].round()
+    pre_shrink[:xy] -= scat_xy
+    scat = lambda tensor: rp.torch_scatter_add_image(tensor, *scat_xy, relative=True, interp='round')
 
     #Where mask==True, we output shrink. Where mask==0, we output expand.
-    mask = torch.ones(1,h,w,dtype=bool,device=device)
-    mask = rp.torch_remap_image(mask, *F.round(), relative=True, interp="nearest")
-    assert mask.dtype==torch.bool, 'If this fails we gotta convert it with mask.=astype(bool)'
+    shrink_mask = torch.ones(1,h,w,dtype=bool,device=device) #The purpose is to get zeroes where no element is used
+    shrink_mask = scat(shrink_mask)
+    assert shrink_mask.dtype==torch.bool, 'If this fails we gotta convert it with mask.=astype(bool)'
 
-    ##CONCAT AND REGAUSSIANIZE AND ADJUST WEIGHTS....
+    #Remove the expansion points where we'll use shrink
+    pre_expand[shrink_mask] = init
 
     #Horizontally Concat
-    concat    = torch.concat([pre_shrink, pre_expand], dim=w_dim)
-
-    #<start> Regaussianize and distribute weights
-    //ABSTRACT INTO NOISE/SUM MATRIX
-    unique_ωc, counts, index_matrix = unique_pixels(concat[-ωc:])
-    unique_c = unique_ωc[:, 1:]
-    u = len(unique_ωc)
-    assert unique_ωc.shape == (u, 1+c)
-    assert unique_ωc.shape == (u,   c)
-    assert counts.shape == (u,)
-    assert index_matrix.max() == u - 1
-    assert index_matrix.min() == 0
-    assert index_matrix.shape == (h, w)
+    concat_dim = w_dim
+    concat     = torch.concat([pre_shrink, pre_expand], dim=concat_dim)
 
     #Regaussianize
-    foreign_noise = torch.randn_like(concat[-c:])
-    assert foreign_noise.shape == concat[-c:] == (c, h, w)
-
-    summed_foreign_noise_colors = sum_indexed_values(foreign_noise, index_matrix)
-    assert summed_foreign_noise_colors.shape == (u, c)
-
-    meaned_foreign_noise_colors = summed_foreign_noise_colors / rearrange(counts, "u -> u 1")
-    assert meaned_foreign_noise_colors.shape == (u, c)
-
-    meaned_foreign_noise = indexed_to_image(index_matrix, meaned_foreign_noise_colors)
-    assert meaned_foreign_noise.shape == (c, h, w)
-
-    zeroed_foreign_noise = foreign_noise - meaned_foreign_noise
-    assert zeroed_foreign_noise.shape == (c, h, w)
-
-    counts_as_colors = rearrange(counts, "u -> u 1")
-    counts_image = indexed_to_image(index_matrix, counts_as_colors)
-    assert counts_image.shape == (1, h, w)
+    concat[-c:], counts_image = regaussianize(concat[-c:])
+    assert  counts_image.shape == (1, h, w)
 
     #Distribute Weights
     concat[ω] /= counts_image[0]
     # concat[ω] = concat[ω].nan_to_num() #We shouldn't need this, this is a crutch. Final mask should take care of this.
 
-    #To upsample noise, we must first divide by the area then add zero-sum-noise
-    concat[-c:] = concat[-c:] / counts_image ** .5
-    concat[-c:] = concat[-c:] + zeroed_foreign_noise
+    pre_shrink, expand = torch.chunk(concat, chunks=2, dim=concat_dim)
+    assert pre_shrink.shape == pre_expand.shape == I.shape
+ 
+    shrink = torch.empty_like(pre_shrink)
+    shrink[ω]   = scat(pre_shrink[ω][None])[0]
+    shrink[:xy] = scat(pre_shrink[:xy]*pre_shrink[ω][None]) / shrink[ω][None]
+    shrink[-c:] = scat(pre_shrink[-c:]*pre_shrink[ω][None]) / scat(pre_shrink[ω][None]**2).sqrt()
 
-    concat[-c:] = concat[-c:] + zeroed_foreign_noise
-
-    #<end> Regaussianize and distribute weights
-    
-
-
-    
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
-
-
-
-    
-
+    output = torch.where(shrink_mask, shrink, expand)
