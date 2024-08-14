@@ -491,6 +491,9 @@ def warp_xyωc(I, F):
     pre_expand = torch.empty_like(I)
     pre_expand[:xy] = init[:xy]
     pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp="nearest")
+    pre_expand[ω][pre_expand[ω]==0]=1 #Give new noise regions a weight of 1 - effectively setting it to init there
+
+    #pre_expand[-c:]=regaussianize(pre_expand[-c:])[0] ; return pre_expand #DEBUG - Uncomment to preview expansion-only noise warping
 
     #Calculate initial pre-shrink
     pre_shrink = I.clone()
@@ -504,8 +507,6 @@ def warp_xyωc(I, F):
     assert out_of_bounds.dtype==torch.bool
     assert out_of_bounds.shape==(1,h,w)
     assert pre_shrink.shape == init.shape
-    # rp.pterm()
-    # pre_shrink[ out_of_bounds ] = init
     pre_shrink = torch.where(out_of_bounds, init, pre_shrink)
 
     #Deal with shrink positions offsets
@@ -518,8 +519,11 @@ def warp_xyωc(I, F):
     shrink_mask = scat(shrink_mask)
     assert shrink_mask.dtype==torch.bool, 'If this fails we gotta convert it with mask.=astype(bool)'
 
+    # rp.cv_imshow(rp.tiled_images([out_of_bounds[0],shrink_mask[0]]),label='OOB') ; return I #DEBUG - uncomment to see the masks
+
     #Remove the expansion points where we'll use shrink
     pre_expand = torch.where(shrink_mask, init, pre_expand)
+    rp.cv_imshow(pre_expand[-c:]/5+.5,'preex')
 
     #Horizontally Concat
     concat_dim = w_dim
@@ -528,10 +532,11 @@ def warp_xyωc(I, F):
     #Regaussianize
     concat[-c:], counts_image = regaussianize(concat[-c:])
     assert  counts_image.shape == (1, h, 2*w)
+    # rp.cv_imshow(concat[-c:]/5+.5,label='regauss') ; return pre_expand #DEBUG - Uncomment to preview regaussianization
 
     #Distribute Weights
     concat[ω] /= counts_image[0]
-    # concat[ω] = concat[ω].nan_to_num() #We shouldn't need this, this is a crutch. Final mask should take care of this.
+    concat[ω] = concat[ω].nan_to_num() #We shouldn't need this, this is a crutch. Final mask should take care of this.
 
     pre_shrink, expand = torch.chunk(concat, chunks=2, dim=concat_dim)
     assert pre_shrink.shape == expand.shape == (3+c, h, w)
@@ -542,6 +547,14 @@ def warp_xyωc(I, F):
     shrink[-c:] = scat(pre_shrink[-c:]*pre_shrink[ω][None]) / scat(pre_shrink[ω][None]**2).sqrt()
 
     output = torch.where(shrink_mask, shrink, expand)
+    # rp.debug_comment([output[ω].min(), output[ω].max()])# --> [tensor(9.5508e-08), tensor(3.6668e-05)]
+    # rp.debug_comment([shrink[ω].min(), shrink[ω].max()])# --> [tensor(1.5264e-06), tensor(12.5988)]
+    # rp.debug_comment([expand[ω].min(), expand[ω].max()])# --> [tensor(0.), tensor(12.5988)]
+# --> [tensor(1.5264e-06), tensor(2.6586)]
+    assert (output[ω]>0).all()
+
+    output[ω] **= .99 #Make it tend towards 1
+
 
     return output
 
