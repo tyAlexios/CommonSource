@@ -8,9 +8,8 @@ import torch
 from einops import rearrange
 from tqdm import tqdm
 
-import raft
-
 sys.path.append(rp.get_path_parent(__file__))
+import raft
 
 
 def unique_pixels(image):
