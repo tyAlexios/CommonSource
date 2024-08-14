@@ -224,18 +224,24 @@ def warp_noise(noise, dx, dy, s=4):
     up_noise = rp.torch_resize_image(noise, (hs, ws), interp="nearest")
     assert up_noise.shape == (c, hs, ws)
 
-    up_noise = rp.torch_remap_image(up_noise, up_dx, up_dy, relative=True, interp="nearest", add_alpha_mask=True)
-    up_noise, alpha = up_noise[:-1], up_noise[-1:]
+    # Warp the noise - and put 0 where it lands out-of-bounds
+    up_noise = rp.torch_remap_image(up_noise, up_dx, up_dy, relative=True, interp="nearest")
     assert up_noise.shape == (c, hs, ws)
-    assert alpha.shape == (1, hs, ws)
     
-    # Fill occluded regions with noise...
-    fill_noise = torch.randn_like(up_noise)
-    up_noise = up_noise * alpha + fill_noise * (1-alpha)
-    assert up_noise.shape == (c, hs, ws)
+    # Regaussianize the noise
+    output = regaussianize(up_noise)
+
+    #Now we resample the noise back down again
+    output = rp.torch_resize_image(output, (h, w), interp='area')
+    output = output * s #Adjust variance by multiplying by sqrt of area, aka sqrt(s*s)=s
+
+    return output
+
+def regaussianize(noise):
+    c, hs, ws = noise.shape
 
     # Find unique pixel values, their indices, and counts in the pixelated noise image
-    unique_colors, counts, index_matrix = unique_pixels(up_noise)
+    unique_colors, counts, index_matrix = unique_pixels(noise)
     u = len(unique_colors)
     assert unique_colors.shape == (u, c)
     assert counts.shape == (u,)
@@ -243,8 +249,8 @@ def warp_noise(noise, dx, dy, s=4):
     assert index_matrix.min() == 0
     assert index_matrix.shape == (hs, ws)
 
-    foreign_noise = torch.randn_like(up_noise)
-    assert foreign_noise.shape == up_noise.shape == (c, hs, ws)
+    foreign_noise = torch.randn_like(noise)
+    assert foreign_noise.shape == noise.shape == (c, hs, ws)
 
     summed_foreign_noise_colors = sum_indexed_values(foreign_noise, index_matrix)
     assert summed_foreign_noise_colors.shape == (u, c)
@@ -263,13 +269,9 @@ def warp_noise(noise, dx, dy, s=4):
     assert counts_image.shape == (1, hs, ws)
 
     #To upsample noise, we must first divide by the area then add zero-sum-noise
-    output = up_noise
+    output = noise
     output = output / counts_image ** .5
     output = output + zeroed_foreign_noise
-
-    #Now we resample the noise back down again
-    output = rp.torch_resize_image(output, (h, w), interp='area')
-    output = output * s #Adjust variance by multiplying by sqrt of area, aka sqrt(s*s)=s
 
     return output
     
