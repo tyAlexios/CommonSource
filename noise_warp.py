@@ -361,7 +361,8 @@ def demo_webcam_noise_warp():
         dx *= Q
         dx = dx.to(device)
         dy = dy.to(device)
-        new_noise = noise
+        new_xyωc = noise_to_xyωc(noise)
+
 
         while True:
             ret, frame = cap.read()
@@ -377,8 +378,8 @@ def demo_webcam_noise_warp():
             x = flow[:, :, 0]
             y = flow[:, :, 1]
 
-            dx = -torch.Tensor(x)
-            dy = -torch.Tensor(y)
+            dx = torch.Tensor(x)
+            dy = torch.Tensor(y)
 
             # Display the original and flow side by side
             combined_img = np.hstack((frame, flow_bgr))
@@ -389,7 +390,8 @@ def demo_webcam_noise_warp():
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
-            new_noise = warp_noise(new_noise, dx, dy, 1)
+            new_xyωc = warp_xyωc(new_xyωc, torch.stack([dx, dy]))
+            new_noise = xyωc_to_noise(new_xyωc)
             display_image(
                 tiled_images(
                     [
@@ -406,6 +408,9 @@ def demo_webcam_noise_warp():
         cv2.destroyAllWindows()
 
     main()
+
+
+
 
 
 
@@ -437,8 +442,8 @@ def xy_meshgrid_like_image(image):
 
 def noise_to_xyωc(noise):
     assert noise.ndim == 3, "noise is in CHW form"
-    zeros=torch.zeros_like(noise[0])
-    ones =torch.ones_like (noise[0])
+    zeros=torch.zeros_like(noise[0][None])
+    ones =torch.ones_like (noise[0][None])
 
     #Prepend [dx=0, dy=0, weights=1] channels
     output=torch.concat([zeros, zeros, ones, noise])
@@ -450,11 +455,11 @@ def xyωc_to_noise(xyωc):
     noise=xyωc[3:]
     return noise
 
-def noise_warp_xyωc(I, F):
+def warp_xyωc(I, F):
     #Input assertions
     assert F.device==I.device
-    assert F.ndim==2, 'F stands for flow, and its in [x y]·h·w form'
-    assert I.ndim==3, 'I stands for input, in [ω x y c]·h·w form where ω=weights, x and y are offsets, and c is num noise channels'
+    assert F.ndim==3, str(F.shape)+' F stands for flow, and its in [x y]·h·w form'
+    assert I.ndim==3, str(I.shape)+' I stands for input, in [ω x y c]·h·w form where ω=weights, x and y are offsets, and c is num noise channels'
     xyωc, h, w = I.shape
     assert F.shape==(2,h,w) # Should be [x y]·h·w
     device=I.device
@@ -488,16 +493,20 @@ def noise_warp_xyωc(I, F):
     pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp="nearest")
 
     #Calculate initial pre-shrink
-    pre_shrink = I.copy()
+    pre_shrink = I.clone()
     pre_shrink[:xy] += F
 
     #Pre-Shrink mask - discard out-of-bounds pixels
-    pos = (grid + pre_shrink).round()
-    in_bounds = (0<= pos[x] < w) & (0<= pos[y] < w)
-    in_bounds = in_bounds[None] #Make the matrix an image tensor
+    pos = (grid + pre_shrink[:xy]).round()
+    in_bounds = (0<= pos[x]) & (pos[x] < w) & (0<= pos[y]) & (pos[y] < w)
+    in_bounds = in_bounds[None] #Match the shape of the input
     out_of_bounds = ~in_bounds
+    assert out_of_bounds.dtype==torch.bool
     assert out_of_bounds.shape==(1,h,w)
-    pre_shrink[ out_of_bounds ] = init
+    assert pre_shrink.shape == init.shape
+    # rp.pterm()
+    # pre_shrink[ out_of_bounds ] = init
+    pre_shrink = torch.where(out_of_bounds, init, pre_shrink)
 
     #Deal with shrink positions offsets
     scat_xy = pre_shrink[:xy].round()
@@ -510,7 +519,7 @@ def noise_warp_xyωc(I, F):
     assert shrink_mask.dtype==torch.bool, 'If this fails we gotta convert it with mask.=astype(bool)'
 
     #Remove the expansion points where we'll use shrink
-    pre_expand[shrink_mask] = init
+    pre_expand = torch.where(shrink_mask, init, pre_expand)
 
     #Horizontally Concat
     concat_dim = w_dim
@@ -518,14 +527,14 @@ def noise_warp_xyωc(I, F):
 
     #Regaussianize
     concat[-c:], counts_image = regaussianize(concat[-c:])
-    assert  counts_image.shape == (1, h, w)
+    assert  counts_image.shape == (1, h, 2*w)
 
     #Distribute Weights
     concat[ω] /= counts_image[0]
     # concat[ω] = concat[ω].nan_to_num() #We shouldn't need this, this is a crutch. Final mask should take care of this.
 
     pre_shrink, expand = torch.chunk(concat, chunks=2, dim=concat_dim)
-    assert pre_shrink.shape == pre_expand.shape == I.shape
+    assert pre_shrink.shape == expand.shape == (3+c, h, w)
  
     shrink = torch.empty_like(pre_shrink)
     shrink[ω]   = scat(pre_shrink[ω][None])[0]
@@ -534,7 +543,7 @@ def noise_warp_xyωc(I, F):
 
     output = torch.where(shrink_mask, shrink, expand)
 
-    torch.where()
+    return output
 
 def get_noise_from_video(
     video_path: str,
