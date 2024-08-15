@@ -361,7 +361,9 @@ def demo_webcam_noise_warp():
         dx *= Q
         dx = dx.to(device)
         dy = dy.to(device)
-        new_xyωc = noise_to_xyωc(noise)
+        # new_xyωc = noise_to_xyωc(noise)
+
+        warper=NoiseWarper(3,h,w,device=device,scale_factor=3)
 
 
         while True:
@@ -390,8 +392,7 @@ def demo_webcam_noise_warp():
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
-            new_xyωc = warp_xyωc(new_xyωc, torch.stack([dx, dy]))
-            new_noise = xyωc_to_noise(new_xyωc)
+            new_noise = warper(dx, dy).noise
             display_image(
                 tiled_images(
                     [
@@ -560,7 +561,7 @@ def warp_xyωc(I, F):
     # rp.debug_comment([output[ω].min(),output[ω].max()])# --> [tensor(0.0010), tensor(2.7004)]
     # rp.debug_comment([shrink[ω].min(),shrink[ω].max()])# --> [tensor(0.), tensor(2.7004)]
     # rp.debug_comment([expand[ω].min(),expand[ω].max()])# --> [tensor(0.0001), tensor(0.3892)]
-    rp.cv_imshow(output[ω]/output[ω].mean()/4,label='weight')
+    rp.cv_imshow(rp.apply_colormap_to_image(output[ω]/output[ω].mean()/4),label='weight')
     # rp.cv_imshow(rp.apply_colormap_to_image(output[ω]/10),label='weight')
     assert (output[ω]>0).all()
     print('%.08f %.08f'%(float(output[ω].min()), float(output[ω].max())))
@@ -576,7 +577,7 @@ class NoiseWarper:
         self,
         c, h, w,
         device,
-        dtype=torch.float16,
+        dtype=torch.float32,
         scale_factor=1,
     ):
 
@@ -607,12 +608,16 @@ class NoiseWarper:
 
     @property
     def noise(self):
+        #TODO: The noise should be downsampled to respect the weights!! 
         noise = self._state_to_noise(self._state)
-        noise = rp.torch_resize_image(noise, (self.h, self.w), interp='area')
+        weights = self._state[2][None] #xyωc
+        noise   = rp.torch_resize_image(noise * weights, (self.h, self.w), interp='area') / rp.torch_resize_image(weights ** 2, (self.h, self.w), interp='area').sqrt()
         noise = noise * self.scale_factor
         return noise
 
-    def __call__(self, flow):
+    def __call__(self, dx, dy):
+
+        flow = torch.stack([dx, dy])
         assert flow.ndim == 3 and flow.shape[0] == 2, "Flow is in [x y]·h·w form"
         flow = rp.torch_resize_image(
             flow,
