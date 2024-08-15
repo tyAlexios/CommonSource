@@ -572,10 +572,74 @@ def warp_xyωc(I, F):
 
 
 class NoiseWarper:
-    def __init__(self,  c, h, w, device=None, dtype=None):
-        noise = torch.randn(c, h, w)
+    def __init__(
+        self,
+        c, h, w,
+        device,
+        dtype=torch.float16,
+        scale_factor=1,
+    ):
 
-        self.xyωc = 
+        #Some non-exhaustive input assertions
+        assert isinstance(c,int) and c>0
+        assert isinstance(h,int) and h>0
+        assert isinstance(w,int) and w>0
+        assert isinstance(scale_factor,int) and w>=1
+
+        #Record arguments
+        self.c=c
+        self.h=h
+        self.w=w
+        self.device=device
+        self.dtype=dtype
+        self.scale_factor=scale_factor
+
+        #Initialize the state
+        self._state = self._noise_to_state(
+            noise=torch.randn(
+                c,
+                h * scale_factor,
+                w * scale_factor,
+                dtype=dtype,
+                device=device,
+            )
+        )
+
+    @property
+    def noise(self):
+        noise = self._state_to_noise(self._state)
+        noise = rp.torch_resize_image(noise, (self.h, self.w), interp='area')
+        noise = noise * self.scale_factor
+        return noise
+
+    def __call__(self, flow):
+        assert flow.ndim == 3 and flow.shape[0] == 2, "Flow is in [x y]·h·w form"
+        flow = rp.torch_resize_image(
+            flow,
+            (
+                self.h * self.scale_factor,
+                self.w * self.scale_factor,
+            ),
+        )
+        self._state = self._warp_state(self._state, flow)
+        return self
+
+    #The following three methods can be overridden in subclasses:
+    
+    @staticmethod
+    def _noise_to_state(noise):
+        return noise_to_xyωc(noise)
+
+    @staticmethod
+    def _state_to_noise(state):
+        return xyωc_to_noise(state)
+
+    @staticmethod
+    def _warp_state(state, flow):
+        return warp_xyωc(state, flow)
+    
+
+    
 
         
 
