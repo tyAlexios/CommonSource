@@ -331,7 +331,7 @@ def demo_webcam_noise_warp():
         aspect_ratio = frame.shape[1] / frame.shape[0]
         target_width = int(target_height * aspect_ratio)
         resized_frame = cv2.resize(frame, (target_width, target_height))
-        print(resized_frame.shape)
+        # print(resized_frame.shape)
         return resized_frame
 
     def main():
@@ -518,6 +518,7 @@ def warp_xyωc(I, F):
     #OTHER ways I tried reducing sensitivity to motion. They work - but 0 is best. Let's just use high resolution.
     # pre_shrink[:xy][pre_shrink[:xy].abs()<.1] = 0  #DEBUG: Uncomment to ablate floating-point swarm positions
     # pre_shrink[:xy] *= -1 #I can't even tell that this is wrong.....
+    # pre_shrink[:xy] *= .9 
     # sensitivity_factor = 4
     # pre_shrink[:xy] = (pre_shrink[:xy]*4).round()/4  #DEBUG: Uncomment to ablate floating-point swarm positions
 
@@ -559,7 +560,10 @@ def warp_xyωc(I, F):
     # rp.debug_comment([output[ω].min(),output[ω].max()])# --> [tensor(0.0010), tensor(2.7004)]
     # rp.debug_comment([shrink[ω].min(),shrink[ω].max()])# --> [tensor(0.), tensor(2.7004)]
     # rp.debug_comment([expand[ω].min(),expand[ω].max()])# --> [tensor(0.0001), tensor(0.3892)]
+    rp.cv_imshow(output[ω]/output[ω].mean()/4,label='weight')
+    # rp.cv_imshow(rp.apply_colormap_to_image(output[ω]/10),label='weight')
     assert (output[ω]>0).all()
+    print('%.08f %.08f'%(float(output[ω].min()), float(output[ω].max())))
 
     output[ω] **= .99 #Make it tend towards 1
 
