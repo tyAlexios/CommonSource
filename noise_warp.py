@@ -276,12 +276,27 @@ def regaussianize(noise):
 
     return output, counts_image
     
-def demo_noise_warp():
+def demo_noise_warp(Q=-6,scale_factor=1,num_frames=300):
     #Run this in a Jupyter notebook and watch the noise go brrrrrrr
+
+    
     d=rp.JupyterDisplayChannel()
     d.display()
     device='cuda'
-    h=w=256
+    h=w=128
+
+    # rp.cv_imshow(rp.apply_colormap_to_image(output[ω]/output[ω].mean()/4),label='weight')
+
+    warper = NoiseWarper(3,h,w,device=device,scale_factor=scale_factor,)
+
+    #Add some ink
+    warper._state[4:, int(h/256*10 * scale_factor) : int(h/256*80 * scale_factor), int(h/256*10 * scale_factor) : int(h/256*80 * scale_factor)] = 1  # Make a little black square
+    warper._state[
+        4:,
+        h * scale_factor // 2 - 5 * scale_factor : h * scale_factor // 2 + 5 * scale_factor,
+        w * scale_factor // 2 - 5 * scale_factor : w * scale_factor // 2 + 5 * scale_factor,
+    ] = 10  # Make a little black square
+    
     noise=torch.randn(3,h,w).to(device)
     wdx,wdy=calculate_wave_pattern(h,w,frame=0)
     sdx,sdy=starfield_zoom(h,w,frame=1)
@@ -291,17 +306,35 @@ def demo_noise_warp():
     
     dx/=dx.max()
     dy/=dy.max()
-    Q=-6
+    # Q=-6
     dy*=Q
     dx*=Q
     dx=dx.to(device)
     dy=dy.to(device)
     new_noise=noise
 
-    for _ in range(10000):
-        new_noise=warp_noise(new_noise,dx,dy,2)
-        # rp.display_image(new_noise)
-        d.update(rp.as_numpy_image(new_noise/4+.5))
+    frames=[]
+    try:
+        for _ in range(num_frames):
+            new_noise=warper(dx,dy).noise
+            weights = warper._state[2]
+            weights = rp.torch_resize_image(weights[None],(h,w))[0]
+            
+            # rp.display_image(new_noise)
+            frame=rp.tiled_images(
+                    [
+                        rp.as_numpy_image(new_noise/4+.5),
+                        rp.apply_colormap_to_image(weights/weights.mean()/4),
+                    ],
+                    border_thickness=0,
+                )
+            frames.append(rp.labeled_image(frame,'Frame %i'%_))
+            d.update(
+                frame
+            )
+    except KeyboardInterrupt:
+        print("Interrupted demo at frame",_)
+    return frames
 
 def demo_webcam_noise_warp():
     import cv2
@@ -456,7 +489,7 @@ def xyωc_to_noise(xyωc):
     noise=xyωc[3:]
     return noise
 
-def warp_xyωc(I, F):
+def warp_xyωc(I, F, xy_mode='float',expand_only=False):
     #Input assertions
     assert F.device==I.device
     assert F.ndim==3, str(F.shape)+' F stands for flow, and its in [x y]·h·w form'
@@ -490,11 +523,21 @@ def warp_xyωc(I, F):
 
     #Caluclate initial pre-expand
     pre_expand = torch.empty_like(I)
-    pre_expand[:xy] = init[:xy]
+
+    #The original plan was to use init xy during expand, because the query position is arbitrary....
+    #It doesn't actually make deep sense to copy the offsets during this step, but it doesn't seem to hurt either...
+    #BUT I think I got slightly better results...?...so I'm going to do it anyway.
+    # pre_expand[:xy] = init[:xy] # <---- Original algorithm I wrote on paper
+    pre_expand[:xy] = rp.torch_remap_image(I[:xy], * -F.round(), relative=True, interp="nearest")# <---- Last minute change
+    
     pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp="nearest")
     pre_expand[ω][pre_expand[ω]==0]=1 #Give new noise regions a weight of 1 - effectively setting it to init there
 
-    # pre_expand[-c:]=regaussianize(pre_expand[-c:])[0] ; return pre_expand #DEBUG - Uncomment to preview expansion-only noise warping
+    if expand_only:
+        #This is an ablation option - simple warp + regaussianize
+        #Enable to preview expansion-only noise warping
+        pre_expand[-c:]=regaussianize(pre_expand[-c:])[0]
+        return pre_expand
 
     #Calculate initial pre-shrink
     pre_shrink = I.clone()
@@ -515,7 +558,9 @@ def warp_xyωc(I, F):
     pre_shrink[:xy] -= scat_xy
 
     #FLOATING POINT POSITIONS: I will disable this for now. It does in fact increase sensitivity! But it also makes it less long-term coherent
-    pre_shrink[:xy] = 0 #DEBUG: Uncomment to ablate floating-point swarm positions
+    assert xy_mode in ['float', 'none']
+    if xy_mode=='none':
+        pre_shrink[:xy] = 0 #DEBUG: Uncomment to ablate floating-point swarm positions
     #OTHER ways I tried reducing sensitivity to motion. They work - but 0 is best. Let's just use high resolution.
     # pre_shrink[:xy][pre_shrink[:xy].abs()<.1] = 0  #DEBUG: Uncomment to ablate floating-point swarm positions
     # pre_shrink[:xy] *= -1 #I can't even tell that this is wrong.....
@@ -558,15 +603,19 @@ def warp_xyωc(I, F):
     shrink[-c:] = scat(pre_shrink[-c:]*pre_shrink[ω][None]) / scat(pre_shrink[ω][None]**2).sqrt()
 
     output = torch.where(shrink_mask, shrink, expand)
+    output[ω] = output[ω] / output[ω].mean() #Don't let them get too big or too small
+    ε = .00001
+    output[ω] += ε #Don't let it go too low
+    
     # rp.debug_comment([output[ω].min(),output[ω].max()])# --> [tensor(0.0010), tensor(2.7004)]
     # rp.debug_comment([shrink[ω].min(),shrink[ω].max()])# --> [tensor(0.), tensor(2.7004)]
     # rp.debug_comment([expand[ω].min(),expand[ω].max()])# --> [tensor(0.0001), tensor(0.3892)]
-    rp.cv_imshow(rp.apply_colormap_to_image(output[ω]/output[ω].mean()/4),label='weight')
+    # rp.cv_imshow(rp.apply_colormap_to_image(output[ω]/output[ω].mean()/4),label='weight')
     # rp.cv_imshow(rp.apply_colormap_to_image(output[ω]/10),label='weight')
     assert (output[ω]>0).all()
-    print('%.08f %.08f'%(float(output[ω].min()), float(output[ω].max())))
+    # print(end='\r%.08f %.08f'%(float(output[ω].min()), float(output[ω].max())))
 
-    output[ω] **= .99 #Make it tend towards 1
+    output[ω] **= .9999 #Make it tend towards 1
 
 
     return output
@@ -617,7 +666,7 @@ class NoiseWarper:
 
     def __call__(self, dx, dy):
 
-        flow = torch.stack([dx, dy])
+        flow = torch.stack([dx, dy]).to(self.device, self.dtype)
         assert flow.ndim == 3 and flow.shape[0] == 2, "Flow is in [x y]·h·w form"
         flow = rp.torch_resize_image(
             flow,
