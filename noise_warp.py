@@ -348,18 +348,6 @@ def demo_webcam_noise_warp():
         tiled_images,
     )
 
-    def draw_hsv(flow, scale=8):
-        h, w = flow.shape[:2]
-        hsv = np.zeros((h, w, 3), dtype=np.uint8)
-        mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-        hsv[..., 0] = ang * 180 / np.pi / 2
-        hsv[..., 1] = 255
-        scaled_mag = mag * scale
-        scaled_mag = np.clip(scaled_mag, 0, 255)  # Ensure it fits in the value range
-        hsv[..., 2] = scaled_mag.astype(np.uint8)
-        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-        return bgr
-
     def resize_frame(frame, target_height=64):
         aspect_ratio = frame.shape[1] / frame.shape[0]
         target_width = int(target_height * aspect_ratio)
@@ -396,19 +384,18 @@ def demo_webcam_noise_warp():
         dy = dy.to(device)
         # new_xyωc = noise_to_xyωc(noise)
 
-        warper=NoiseWarper(3,h,w,device=device,scale_factor=3)
+        warper=NoiseWarper(3,h,w,device=device,scale_factor=2)
 
 
         while True:
             ret, frame = cap.read()
             frame = resize_frame(frame)
+            frame=rp.horizontally_flipped_image(frame)
             frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
 
             # Compute the optical flow
             flow = optical_flow.calc(prev_gray, frame_gray, None)
-
-            # Visualization
-            flow_bgr = draw_hsv(flow)
 
             x = flow[:, :, 0]
             y = flow[:, :, 1]
@@ -416,22 +403,21 @@ def demo_webcam_noise_warp():
             dx = torch.Tensor(x)
             dy = torch.Tensor(y)
 
-            # Display the original and flow side by side
-            combined_img = np.hstack((frame, flow_bgr))
-            cv2.imshow("Frame and Optical Flow", combined_img)
-
             prev_gray = frame_gray.copy()
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
             new_noise = warper(dx, dy).noise
+            weights = warper._state[2]
+            weights = rp.torch_resize_image(weights[None],(h,w))[0]
+
             display_image(
                 tiled_images(
                     [
-                        as_numpy_image(new_noise / 2 + 0.5),
+                        as_numpy_image(new_noise / 5 + 0.5),
                         cv_bgr_rgb_swap(frame),
-                        cv_bgr_rgb_swap(flow_bgr),
+                        rp.apply_colormap_to_image(weights / weights.mean() / 4),
                     ]
                 )
             )
@@ -489,7 +475,7 @@ def xyωc_to_noise(xyωc):
     noise=xyωc[3:]
     return noise
 
-def warp_xyωc(I, F, xy_mode='float',expand_only=False):
+def warp_xyωc(I, F, xy_mode=5,expand_only=False):
     #Input assertions
     assert F.device==I.device
     assert F.ndim==3, str(F.shape)+' F stands for flow, and its in [x y]·h·w form'
@@ -558,15 +544,22 @@ def warp_xyωc(I, F, xy_mode='float',expand_only=False):
     pre_shrink[:xy] -= scat_xy
 
     #FLOATING POINT POSITIONS: I will disable this for now. It does in fact increase sensitivity! But it also makes it less long-term coherent
-    assert xy_mode in ['float', 'none']
+    assert xy_mode in ['float', 'none'] or isinstance(xy_mode, int)
     if xy_mode=='none':
         pre_shrink[:xy] = 0 #DEBUG: Uncomment to ablate floating-point swarm positions
+
+    if isinstance(xy_mode, int):
+        # XY quantization: best to use odd numbers!
+        quant = xy_mode
+        pre_shrink[:xy] = (
+            pre_shrink[:xy] * quant
+        ).round() / quant  
+
     #OTHER ways I tried reducing sensitivity to motion. They work - but 0 is best. Let's just use high resolution.
     # pre_shrink[:xy][pre_shrink[:xy].abs()<.1] = 0  #DEBUG: Uncomment to ablate floating-point swarm positions
     # pre_shrink[:xy] *= -1 #I can't even tell that this is wrong.....
     # pre_shrink[:xy] *= .9 
     # sensitivity_factor = 4
-    # pre_shrink[:xy] = (pre_shrink[:xy]*4).round()/4  #DEBUG: Uncomment to ablate floating-point swarm positions
 
     scat = lambda tensor: rp.torch_scatter_add_image(tensor, *scat_xy, relative=True)
 
@@ -667,6 +660,8 @@ class NoiseWarper:
     def __call__(self, dx, dy):
 
         flow = torch.stack([dx, dy]).to(self.device, self.dtype)
+        _, oflowh, ofloww = flow.shape #Original height and width of the flow
+        
         assert flow.ndim == 3 and flow.shape[0] == 2, "Flow is in [x y]·h·w form"
         flow = rp.torch_resize_image(
             flow,
@@ -674,12 +669,19 @@ class NoiseWarper:
                 self.h * self.scale_factor,
                 self.w * self.scale_factor,
             ),
-        )
+        ) 
+
+        _, flowh, floww = flow.shape
+
+        #Multiply the flow values by the size change
+        flow[0] *= flowh / oflowh * self.scale_factor
+        flow[1] *= floww / ofloww * self.scale_factor
+        
         self._state = self._warp_state(self._state, flow)
         return self
 
     #The following three methods can be overridden in subclasses:
-    
+
     @staticmethod
     def _noise_to_state(noise):
         return noise_to_xyωc(noise)
