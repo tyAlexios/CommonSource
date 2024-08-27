@@ -946,7 +946,7 @@ def get_noise_from_video(
         
         rp.fansi_print(rp.get_file_name(__file__)+": Done warping noise, results are at " + rp.get_absolute_path(output_folder), "green", "bold")
 
-    return numpy_noises, vis_frames
+    return rp.gather_vars('numpy_noises numpy_flows vis_frames')
 
 if __name__ == '__main__':
     fire.Fire(get_noise_from_video)
