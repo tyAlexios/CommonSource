@@ -854,7 +854,7 @@ def get_noise_from_video(
             for video_frame in tqdm(video_frames[1:]):
 
                 dx, dy = raft_model(prev_video_frame, video_frame)
-                noise = warper(dx, dy)
+                noise = warper(dx, dy).noise
                 prev_video_frame = video_frame
 
                 numpy_flow = np.stack(
@@ -879,7 +879,10 @@ def get_noise_from_video(
                     down_noise_image_c = min(noise_channels,3)
                     down_noise_image[:,:,:down_noise_image_c]=rp.as_numpy_image(down_noise)[:,:,:down_noise_image_c]
 
-                    down_video_frame, down_flow_rgb = rp.resize_images(video_frame, flow_rgb, size=1/downscale_factor, interp='area')
+                    down_video_frame, down_flow_rgb = rp.resize_images(
+                        video_frame, flow_rgb,
+                        size=rp.get_image_dimensions(down_noise_image),
+                    )
                     
                     visualization = rp.as_byte_image(
                         rp.tiled_images(
