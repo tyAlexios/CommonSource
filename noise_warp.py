@@ -338,7 +338,6 @@ def demo_noise_warp(Q=-6,scale_factor=1,num_frames=300):
 
 def demo_webcam_noise_warp():
     import cv2
-    import numpy as np
     from rp import (
         as_numpy_image,
         cv_bgr_rgb_swap,
@@ -368,7 +367,6 @@ def demo_webcam_noise_warp():
         d.display()
         device = "cpu"
         h, w = get_image_dimensions(prev_frame)
-        noise = torch.randn(3, h, w).to(device)
         wdx, wdy = calculate_wave_pattern(h, w, frame=0)
         sdx, sdy = starfield_zoom(h, w, frame=1)
 
@@ -492,7 +490,7 @@ def warp_xyωc(I, F, xy_mode=5,expand_only=False):
     ω   = 2        # I[ω]     // index of weight channel
     c   = xyωc-xyω # I[-c:]   // num noise channels
     ωc  = xyωc-xy  # I[-ωc:]
-    h_dim = 1
+    # h_dim = 1
     w_dim = 2
     assert c, 'I has no noise channels. There is nothing to warp.'
     assert (I[ω]>0).all(), 'All weights should be greater than 0'
@@ -676,6 +674,7 @@ class NoiseWarper:
         #Multiply the flow values by the size change
         flow[0] *= flowh / oflowh * self.scale_factor
         flow[1] *= floww / ofloww * self.scale_factor
+
         
         self._state = self._warp_state(self._state, flow)
         return self
