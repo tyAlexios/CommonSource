@@ -760,7 +760,10 @@ def get_noise_from_video(
     """
 
     if device is None:
-        device = rp.select_torch_device(prefer_used=True)
+        if rp.currently_running_mac():
+            device = 'cpu'
+        else:
+            device = rp.select_torch_device(prefer_used=True)
     
     raft_model = raft.RaftOpticalFlow(device, "large")
 
