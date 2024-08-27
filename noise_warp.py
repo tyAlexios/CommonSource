@@ -651,11 +651,17 @@ class NoiseWarper:
         #TODO: The noise should be downsampled to respect the weights!! 
         noise = self._state_to_noise(self._state)
         weights = self._state[2][None] #xyωc
-        noise   = rp.torch_resize_image(noise * weights, (self.h, self.w), interp='area') / rp.torch_resize_image(weights ** 2, (self.h, self.w), interp='area').sqrt()
+        noise = (
+              rp.torch_resize_image(noise * weights, (self.h, self.w), interp="area")
+            / rp.torch_resize_image(weights**2     , (self.h, self.w), interp="area").sqrt()
+        )
         noise = noise * self.scale_factor
         return noise
 
     def __call__(self, dx, dy):
+
+        if rp.is_numpy_array(dx): dx = torch.tensor(dx).to(self.device, self.dtype)
+        if rp.is_numpy_array(dy): dy = torch.tensor(dy).to(self.device, self.dtype)
 
         flow = torch.stack([dx, dy]).to(self.device, self.dtype)
         _, oflowh, ofloww = flow.shape #Original height and width of the flow
