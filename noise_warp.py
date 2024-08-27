@@ -619,6 +619,8 @@ class NoiseWarper:
         device,
         dtype=torch.float32,
         scale_factor=1,
+        post_noise_alpha = 0,
+        progressive_noise_alpha = 0,
     ):
 
         #Some non-exhaustive input assertions
@@ -634,6 +636,8 @@ class NoiseWarper:
         self.device=device
         self.dtype=dtype
         self.scale_factor=scale_factor
+        self.progressive_noise_alpha=progressive_noise_alpha
+        self.post_noise_alpha=post_noise_alpha
 
         #Initialize the state
         self._state = self._noise_to_state(
@@ -656,6 +660,10 @@ class NoiseWarper:
             / rp.torch_resize_image(weights**2     , (self.h, self.w), interp="area").sqrt()
         )
         noise = noise * self.scale_factor
+
+        if self.post_noise_alpha:
+            noise = mix_new_noise(noise, self.post_noise_alpha)
+
         return noise
 
     def __call__(self, dx, dy):
@@ -681,7 +689,6 @@ class NoiseWarper:
         flow[0] *= flowh / oflowh * self.scale_factor
         flow[1] *= floww / ofloww * self.scale_factor
 
-        
         self._state = self._warp_state(self._state, flow)
         return self
 
@@ -695,15 +702,21 @@ class NoiseWarper:
     def _state_to_noise(state):
         return xyωc_to_noise(state)
 
-    @staticmethod
-    def _warp_state(state, flow):
+    def _warp_state(self, state, flow):
+
+        if self.progressive_noise_alpha:
+            state[3:] = mix_new_noise(state[3:], self.progressive_noise_alpha)
+
         return warp_xyωc(state, flow)
     
 
+def mix_new_noise(noise, alpha):
+    """As alpha --> 1, noise is destroyed"""
+    if isinstance(noise, torch.Tensor): return (torch.randn_like(noise)       * alpha + noise * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
+    elif isinstance(noise, np.ndarray): return (np.random.randn(*noise.shape) * alpha + noise * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
+    else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
+
     
-
-        
-
 def get_noise_from_video(
     video_path: str,
     noise_channels: int = 3,
@@ -715,6 +728,8 @@ def get_noise_from_video(
     device=None,
     video_preprocessor = None,
     save_files=True,
+    progressive_noise_alpha = 0,
+    post_noise_alpha = 0,
 ):
     """
     Extract noise from a video by warping random noise using optical flow between consecutive frames.
@@ -840,6 +855,8 @@ def get_noise_from_video(
             h = resize_flow * h,
             w = resize_flow * w,
             device = device,
+            post_noise_alpha = post_noise_alpha,
+            progressive_noise_alpha = progressive_noise_alpha,
         )
 
         prev_video_frame = video_frames[0]
