@@ -707,6 +707,7 @@ def get_noise_from_video(
     downscale_factor: int = 1,
     device=None,
     video_preprocessor = None,
+    save_files=True,
 ):
     """
     Extract noise from a video by warping random noise using optical flow between consecutive frames.
@@ -731,6 +732,7 @@ def get_noise_from_video(
         video_preprocessor (callable): A function that takes a THW3 RGB uint8 video numpy array, and returns another THW3 numpy array
                                        This can be used for removing watermarks or resizing the video or any other preprocessing steps
                                        This is applied to the input video, directly after loading it from video_path
+        save_files (bool): If True, will save files to disk.
 
     Returns:
         tuple: A tuple containing:
@@ -883,7 +885,7 @@ def get_noise_from_video(
             rp.fansi_print("Interrupted! Returning %i noises" % len(numpy_noises), "cyan", "bold")
             pass
 
-    if vis_frames:
+    if save_files and vis_frames:
         # vis_frames = np.stack(vis_frames)
         vis_img_folder = rp.make_directory(output_folder + "/visualization_images")
         vis_img_paths = rp.path_join(vis_img_folder, "visual_%05i.png")
@@ -930,14 +932,16 @@ def get_noise_from_video(
 
     numpy_noises = np.stack(numpy_noises).astype(np.float16)
     numpy_flows = np.stack(numpy_flows).astype(np.float16)
-    noises_path = rp.path_join(output_folder, "noises.npy")
-    flows_path = rp.path_join(output_folder, "flows_dxdy.npy")
-    np.save(noises_path, numpy_noises)
-    rp.fansi_print("Saved " + noises_path + " with shape " + str(numpy_noises.shape), "green")
-    np.save(flows_path, numpy_flows)
-    rp.fansi_print("Saved " + flows_path + " with shape " + str(numpy_flows.shape), "green")
     
-    rp.fansi_print(rp.get_file_name(__file__)+": Done warping noise, results are at " + rp.get_absolute_path(output_folder), "green", "bold")
+    if save_files:
+        noises_path = rp.path_join(output_folder, "noises.npy")
+        flows_path = rp.path_join(output_folder, "flows_dxdy.npy")
+        np.save(noises_path, numpy_noises)
+        rp.fansi_print("Saved " + noises_path + " with shape " + str(numpy_noises.shape), "green")
+        np.save(flows_path, numpy_flows)
+        rp.fansi_print("Saved " + flows_path + " with shape " + str(numpy_flows.shape), "green")
+        
+        rp.fansi_print(rp.get_file_name(__file__)+": Done warping noise, results are at " + rp.get_absolute_path(output_folder), "green", "bold")
 
     return numpy_noises, vis_frames
 
