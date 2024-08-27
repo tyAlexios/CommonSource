@@ -710,6 +710,7 @@ def get_noise_from_video(
     output_folder: str = None,
     visualize: bool = True,
     resize_frames: tuple = None,
+    resize_flow: int = 1,
     downscale_factor: int = 1,
     device=None,
     video_preprocessor = None,
@@ -732,6 +733,10 @@ def get_noise_from_video(
         resize_frames (tuple or float, optional): Size to resize the input frames.
                                                   If a tuple (height, width), resizes to the exact dimensions.
                                                   If a float, resizes both dimensions relatively and evenly. Defaults to None.
+                                                  This is applied *before* calculating optical flow, so it will make flow calculation slower.
+        resize_flow (int): Resize the optical flows calculated after resize_frames. Controls the underlying noise resolution.
+                           Will not make flow calculation slower - effectively uses bilinear interpolation to upsample the flow.
+                           Should be an integer > 0
         downscale_factor (int): Factor by which to downscale the generated noise.
                                 Larger factor --> smaller noise image.
                                 This factor should evenly divide the height and width of the video frames.
@@ -764,6 +769,9 @@ def get_noise_from_video(
         video_demo("/efs/users/ryan.burgert/public/sharing/KevinSpinnerNoiseWarping/diffuse_images_360", downscale_factor=8, resize_frames=.5)
         video_demo("/root/CleanCode/Projects/flow_noise_warping/outputs/kevin_spinner/kevin_vps7.mp4", downscale_factor=4, resize_frames=.5)
     """
+
+    #Input assertions
+    assert isinstance(resize_flow, int) and resize_flow >= 1
 
     if device is None:
         if rp.currently_running_mac():
@@ -825,8 +833,15 @@ def get_noise_from_video(
             display_channel = rp.JupyterDisplayChannel()
             display_channel.display()
 
+        warper = NoiseWarper(
+            c = noise_channels,
+            h = resize_flow * h,
+            w = resize_flow * w,
+            device = device,
+        )
+
         prev_video_frame = video_frames[0]
-        noise = torch.randn(noise_channels, h, w).to(device)
+        noise = warper.noise
         down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
         
         numpy_noise = rp.as_numpy_array(down_noise).astype(np.float16)
@@ -839,7 +854,7 @@ def get_noise_from_video(
             for video_frame in tqdm(video_frames[1:]):
 
                 dx, dy = raft_model(prev_video_frame, video_frame)
-                noise = warp_noise(noise, -dx, -dy)
+                noise = warper(dx, dy)
                 prev_video_frame = video_frame
 
                 numpy_flow = np.stack(
