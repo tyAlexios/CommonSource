@@ -746,9 +746,11 @@ def get_noise_from_video(
         save_files (bool): If True, will save files to disk.
 
     Returns:
-        tuple: A tuple containing:
-            - numpy_noises (np.ndarray): Generated noise with shape [T, C, H, W].
-            - vis_frames (np.ndarray): Visualization frames with shape [T, H, W, C].
+        EasyDict: A dict containing the following keys:
+            - 'numpy_noises' (np.ndarray): Generated noise with form [T, H, W, C].
+            - 'numpy_flows' (np.ndarray): The (dx, dy)'s with form [T-1, 2, H, W]
+            - 'vis_frames' (np.ndarray): Visualization frames with form [T, H, W, C].
+            - 'output_folder' (str): The path to the folder where outputs are saved (if save_files)
 
     Examples:
         # Command line usage
@@ -844,7 +846,7 @@ def get_noise_from_video(
         noise = warper.noise
         down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
         
-        numpy_noise = rp.as_numpy_array(down_noise).astype(np.float16)
+        numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16)
 
         numpy_noises = [numpy_noise]
         numpy_flows = []
@@ -868,7 +870,7 @@ def get_noise_from_video(
                 down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
                 down_noise = down_noise * downscale_factor #Adjust for STD
                 
-                numpy_noise = rp.as_numpy_array(down_noise).astype(np.float16)
+                numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16)
                 numpy_noises.append(numpy_noise)
 
                 if visualize:
@@ -912,6 +914,9 @@ def get_noise_from_video(
             rp.fansi_print("Interrupted! Returning %i noises" % len(numpy_noises), "cyan", "bold")
             pass
 
+    numpy_noises = np.stack(numpy_noises).astype(np.float16)
+    numpy_flows = np.stack(numpy_flows).astype(np.float16)
+
     if save_files and vis_frames:
         # vis_frames = np.stack(vis_frames)
         vis_img_folder = rp.make_directory(output_folder + "/visualization_images")
@@ -928,7 +933,7 @@ def get_noise_from_video(
                 framerate=30,
             )
             rp.save_video_mp4(
-                rearrange(np.stack(numpy_noises) / 4 + 0.5, "B C H W -> B H W C")[:,:,:,:3],
+                (numpy_noises / 4 + 0.5)[:,:,:,:3],
                 noise_mp4_path,
                 video_bitrate="max",
                 framerate=30,
@@ -957,9 +962,6 @@ def get_noise_from_video(
         else:
             rp.fansi_print("Please install ffmpeg! We won't save an MP4 this time - please try again.")
 
-    numpy_noises = np.stack(numpy_noises).astype(np.float16)
-    numpy_flows = np.stack(numpy_flows).astype(np.float16)
-    
     if save_files:
         noises_path = rp.path_join(output_folder, "noises.npy")
         flows_path = rp.path_join(output_folder, "flows_dxdy.npy")
@@ -970,7 +972,7 @@ def get_noise_from_video(
         
         rp.fansi_print(rp.get_file_name(__file__)+": Done warping noise, results are at " + rp.get_absolute_path(output_folder), "green", "bold")
 
-    return rp.gather_vars('numpy_noises numpy_flows vis_frames')
+    return rp.gather_vars('numpy_noises numpy_flows vis_frames output_folder')
 
 if __name__ == '__main__':
     fire.Fire(get_noise_from_video)
