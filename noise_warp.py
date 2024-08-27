@@ -473,7 +473,7 @@ def xyωc_to_noise(xyωc):
     noise=xyωc[3:]
     return noise
 
-def warp_xyωc(I, F, xy_mode=5,expand_only=False):
+def warp_xyωc(I, F, xy_mode='none',expand_only=False):
     #Input assertions
     assert F.device==I.device
     assert F.ndim==3, str(F.shape)+' F stands for flow, and its in [x y]·h·w form'
