@@ -935,7 +935,7 @@ def get_noise_from_video(
     numpy_flows = np.stack(numpy_flows).astype(np.float16)
 
     if save_files and vis_frames:
-        # vis_frames = np.stack(vis_frames)
+        vis_frames = np.stack(vis_frames)
         vis_img_folder = rp.make_directory(output_folder + "/visualization_images")
         vis_img_paths = rp.path_join(vis_img_folder, "visual_%05i.png")
         rp.save_images(vis_frames, vis_img_paths, show_progress=True)
