@@ -428,11 +428,6 @@ def demo_webcam_noise_warp():
     main()
 
 
-
-
-
-
-
 def xy_meshgrid_like_image(image):
     """
     Example:
@@ -933,9 +928,9 @@ def get_noise_from_video(
 
     numpy_noises = np.stack(numpy_noises).astype(np.float16)
     numpy_flows = np.stack(numpy_flows).astype(np.float16)
+    if vis_frames: vis_frames = np.stack(vis_frames)
 
     if save_files and vis_frames:
-        vis_frames = np.stack(vis_frames)
         vis_img_folder = rp.make_directory(output_folder + "/visualization_images")
         vis_img_paths = rp.path_join(vis_img_folder, "visual_%05i.png")
         rp.save_images(vis_frames, vis_img_paths, show_progress=True)
