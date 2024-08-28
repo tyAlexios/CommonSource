@@ -498,7 +498,7 @@ def warp_xyωc(I, F, xy_mode='none',expand_only=False):
     init = torch.empty_like(I)
     init[:xy]=0
     init[ω]=1
-    init[c:]=0
+    init[-c:]=0
 
     #Caluclate initial pre-expand
     pre_expand = torch.empty_like(I)
