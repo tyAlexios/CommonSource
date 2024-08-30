@@ -16,7 +16,13 @@ class BackgroundRemover(rp.CachedInstances):
         rp.display_alpha_image(rgba_image)
     """
 
-    def __init__(self, device, checkpoint_path="transparent-background/ckpt_base.pth"):
+    def __init__(self, device, checkpoint_path=None):
+        if checkpoint_path is None:
+            checkpoint_path = rp.path_join(
+                rp.r._rp_downloads_folder,
+                "transparent-background/ckpt_base.pth",
+            )
+
         try:
             from transparent_background import Remover
         except ImportError:
