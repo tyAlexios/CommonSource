@@ -524,7 +524,7 @@ def warp_xyωc(I, F, xy_mode='none',expand_only=False):
 
     #Pre-Shrink mask - discard out-of-bounds pixels
     pos = (grid + pre_shrink[:xy]).round()
-    in_bounds = (0<= pos[x]) & (pos[x] < w) & (0<= pos[y]) & (pos[y] < w)
+    in_bounds = (0<= pos[x]) & (pos[x] < w) & (0<= pos[y]) & (pos[y] < h)
     in_bounds = in_bounds[None] #Match the shape of the input
     out_of_bounds = ~in_bounds
     assert out_of_bounds.dtype==torch.bool
@@ -930,7 +930,7 @@ def get_noise_from_video(
     numpy_flows = np.stack(numpy_flows).astype(np.float16)
     if vis_frames: vis_frames = np.stack(vis_frames)
 
-    if save_files and vis_frames:
+    if save_files and len(vis_frames):
         vis_img_folder = rp.make_directory(output_folder + "/visualization_images")
         vis_img_paths = rp.path_join(vis_img_folder, "visual_%05i.png")
         rp.save_images(vis_frames, vis_img_paths, show_progress=True)
