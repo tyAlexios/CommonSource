@@ -41,6 +41,7 @@ class BackgroundRemover(rp.CachedInstances):
         """Returns an RGBA image"""
         image = rp.as_pil_image(rp.as_float_image(rp.as_rgb_image(image)))
         output = self.remover.process(image, type="rgba")
+        output = rp.as_float_image(output) # I usually expect alpha to be between 0 and 1 not 0 and 255
         return output
 
 def demo():
