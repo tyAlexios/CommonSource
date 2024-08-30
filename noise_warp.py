@@ -757,6 +757,9 @@ def get_noise_from_video(
                                        This can be used for removing watermarks or resizing the video or any other preprocessing steps
                                        This is applied to the input video, directly after loading it from video_path
         save_files (bool): If True, will save files to disk.
+        progressive_noise_alpha: For ryan, don't worry about it
+        post_noise_alpha: For ryan, don't worry about it
+        remove_background: If true will attempt to matte out the background and composite the computed noise on that background
 
     Returns:
         EasyDict: A dict containing the following keys:
