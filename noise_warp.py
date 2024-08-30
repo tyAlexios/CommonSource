@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 sys.path.append(rp.get_path_parent(__file__))
 import raft
-
+from background_remover import BackgroundRemover
 
 def unique_pixels(image):
     """
@@ -704,11 +704,14 @@ class NoiseWarper:
 
         return warp_xyωc(state, flow)
     
+def blend_noise(noise_background, noise_foreground, alpha):
+    """ Variance-preserving blend """
+    return (noise_foreground * alpha + noise_background * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
 
 def mix_new_noise(noise, alpha):
     """As alpha --> 1, noise is destroyed"""
-    if isinstance(noise, torch.Tensor): return (torch.randn_like(noise)       * alpha + noise * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
-    elif isinstance(noise, np.ndarray): return (np.random.randn(*noise.shape) * alpha + noise * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
+    if isinstance(noise, torch.Tensor): blend_noise(noise, torch.randn_like(noise)      , alpha)
+    elif isinstance(noise, np.ndarray): blend_noise(noise, np.random.randn(*noise.shape), alpha)
     else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
 
     
