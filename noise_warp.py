@@ -728,6 +728,7 @@ def get_noise_from_video(
     save_files=True,
     progressive_noise_alpha = 0,
     post_noise_alpha = 0,
+    remove_background=False,
 ):
     """
     Extract noise from a video by warping random noise using optical flow between consecutive frames.
@@ -828,6 +829,26 @@ def get_noise_from_video(
     if resize_frames is not None:
         rp.fansi_print("Resizing all input frames to size %s"%str(resize_frames), 'yellow')
         video_frames=rp.resize_images(video_frames, size=resize_frames, interp='area')
+
+    if remove_background:
+        alphas = []
+
+        background_remover = BackgroundRemover(device)
+
+        if visualize and rp.running_in_jupyter_notebook():
+            alpha_display_channel = rp.JupyterDisplayChannel()
+            alpha_display_channel.display()
+
+        for video_frame in rp.eta(video_frames, title='Removing Backgrounds'):
+            rgba_image = background_remover(video_frame)
+            alpha = rp.get_alpha_channel(rgba_image)
+            alphas.append(alpha)
+
+            if visualize and running_in_jupyter_notebook():
+                alpha_display_channel.update(alpha)
+
+        del background_remover #Free GPU usage
+        
         
     video_frames = rp.as_rgb_images(video_frames)
     video_frames = np.stack(video_frames)
