@@ -842,10 +842,15 @@ def get_noise_from_video(
         for video_frame in rp.eta(video_frames, title='Removing Backgrounds'):
             rgba_image = background_remover(video_frame)
             alpha = rp.get_alpha_channel(rgba_image)
+            alpha = rp.as_float_image(alpha)
             alphas.append(alpha)
 
-            if visualize and running_in_jupyter_notebook():
-                alpha_display_channel.update(alpha)
+            if visualize and rp.running_in_jupyter_notebook():
+                alpha_display_channel.update(
+                    rp.horizontally_concatenated_images(
+                        rp.with_alpha_checkerboard(rgba_image), alpha
+                    )
+                )
 
         del background_remover #Free GPU usage
         
@@ -885,14 +890,14 @@ def get_noise_from_video(
         noise = warper.noise
         down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
         
-        numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16)
+        numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16) # In HWC form
 
         numpy_noises = [numpy_noise]
         numpy_flows = []
         vis_frames = []
 
         try:
-            for video_frame in tqdm(video_frames[1:]):
+            for index, video_frame in enumerate(tqdm(video_frames[1:])):
 
                 dx, dy = raft_model(prev_video_frame, video_frame)
                 noise = warper(dx, dy).noise
@@ -908,23 +913,42 @@ def get_noise_from_video(
 
                 down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
                 down_noise = down_noise * downscale_factor #Adjust for STD
-                
+
                 numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16)
+
+                if remove_background:
+                    if 'background_noise' not in dir():
+                        background_noise = np.random.randn(*numpy_noise.shape)
+                    numpy_noise_alpha = alphas[index]
+                    numpy_noise_alpha = rp.cv_resize_image(numpy_noise_alpha, numpy_noise.shape[:2])
+                    numpy_noise = blend_noise(background_noise, numpy_noise, numpy_noise_alpha[:,:,None])
+                        
                 numpy_noises.append(numpy_noise)
 
                 if visualize:
                     flow_rgb = rp.optical_flow_to_image(dx, dy)
 
                     #Turn the noise into a numpy HWC RGB array
-                    down_noise_image = np.zeros((*down_noise.shape[1:],3))
+                    down_noise_image = np.zeros((*numpy_noise.shape[:2], 3))
                     down_noise_image_c = min(noise_channels,3)
-                    down_noise_image[:,:,:down_noise_image_c]=rp.as_numpy_image(down_noise)[:,:,:down_noise_image_c]
+                    down_noise_image[:,:,:down_noise_image_c]=numpy_noise[:,:,:down_noise_image_c]
 
-                    down_video_frame, down_flow_rgb = rp.resize_images(
-                        video_frame, flow_rgb,
-                        size=rp.get_image_dimensions(down_noise_image),
-                    )
-                    
+
+                    down_size = rp.get_image_dimensions(down_noise_image)
+                    down_video_frame, down_flow_rgb = rp.resize_images(video_frame, flow_rgb, size=down_size)
+
+                    optional_images = []
+                    optional_labels = []
+                    if remove_background:
+                        alpha = alphas[index]
+                        down_alpha = rp.cv_resize_image(alpha, down_size)
+
+                        optional_images.append(down_alpha)
+                        optional_labels.append('Alpha')
+
+                        optional_images.append(rp.with_alpha_checkerboard(rp.with_image_alpha(down_video_frame,down_alpha)))
+                        optional_labels.append('RGBA')
+
                     visualization = rp.as_byte_image(
                         rp.tiled_images(
                             rp.labeled_images(
@@ -933,13 +957,13 @@ def get_noise_from_video(
                                     down_video_frame,
                                     down_flow_rgb,
                                     down_noise_image / 5 + down_video_frame,
-                                ],
+                                ] + optional_images,
                                 [
                                     "Warped Noise",
                                     "Input Video",
                                     "Optical Flow",
                                     "Overlaid",
-                                ],
+                                ] + optional_labels,
                             )
                         )
                     )
