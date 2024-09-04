@@ -738,7 +738,8 @@ def get_noise_from_video(
     Args:
         video_path (str): Path to the input video file (MP4), 
                           a folder containing image frames,
-                          or a glob pattern like "/path/to/images/*.png".
+                          or a glob pattern like "/path/to/images/*.png",
+                          or a URL pointing to a video file online.
                           You can also pass a numpy video array in THWC form
         noise_channels (int, optional): Number of channels in the generated noise. Defaults to 3.
         output_folder (str, optional): Folder to save the output noise and visualization.
@@ -803,7 +804,7 @@ def get_noise_from_video(
     # Load video frames into a [T, H, W, C] numpy array, where C=3 and values are between 0 and 1
     # Can be specified as an MP4, a folder that contains images, or a glob like /path/to/*.png
     assert rp.is_numpy_array(video_path) or isinstance(video_path, str)
-    if rp.is_video_file(video_path):
+    if rp.is_video_file(video_path) or rp.is_valid_url(video_path):
         video_frames = rp.load_video(video_path)
     elif rp.is_numpy_array(video_path):
         #We can also pass a numpy video as an input in THWC form
