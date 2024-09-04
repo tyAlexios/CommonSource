@@ -772,22 +772,81 @@ def get_noise_from_video(
 
     Examples:
         # Command line usage
-        python noise_warp.py --video_path /path/to/video.mp4 --noise_channels 3 --output_folder /path/to/output
-        python noise_warp.py --video_path /path/to/frames_folder --resize_frames 0.5 --downscale_factor 2
-        python noise_warp.py --video_path "/path/to/frames/frame_*.png" --resize_frames (256, 256)
+        >>> python noise_warp.py --video_path /path/to/video.mp4 --noise_channels 3 --output_folder /path/to/output
+        >>> python noise_warp.py --video_path /path/to/frames_folder --resize_frames 0.5 --downscale_factor 2
+        >>> python noise_warp.py --video_path "/path/to/frames/frame_*.png" --resize_frames (256, 256)
 
         # Function call
-        numpy_noises, vis_frames = get_noise_from_video(
-            video_path="/path/to/video.mp4",
-            noise_channels=3,
-            output_folder="/path/to/output",
-            visualize=True,
-            resize_frames=0.5,
-            downscale_factor=2,
-        )
-        video_demo("/root/CleanCode/Projects/flow_noise_warping/outputs/water/waves_bilinear.mp4", downscale_factor=4)
-        video_demo("/efs/users/ryan.burgert/public/sharing/KevinSpinnerNoiseWarping/diffuse_images_360", downscale_factor=8, resize_frames=.5)
-        video_demo("/root/CleanCode/Projects/flow_noise_warping/outputs/kevin_spinner/kevin_vps7.mp4", downscale_factor=4, resize_frames=.5)
+        >>> from rp.git.CommonSource import *
+        >>> numpy_noises, vis_frames = get_noise_from_video(
+        ...     video_path="/path/to/video.mp4",
+        ...     noise_channels=3,
+        ...     output_folder="/path/to/output",
+        ...     visualize=True,
+        ...     resize_frames=0.5,
+        ...     downscale_factor=2,
+        ... )
+        >>> video_demo("/root/CleanCode/Projects/flow_noise_warping/outputs/water/waves_bilinear.mp4", downscale_factor=4)
+        >>> video_demo("/efs/users/ryan.burgert/public/sharing/KevinSpinnerNoiseWarping/diffuse_images_360", downscale_factor=8, resize_frames=.5)
+        >>> video_demo("/root/CleanCode/Projects/flow_noise_warping/outputs/kevin_spinner/kevin_vps7.mp4", downscale_factor=4, resize_frames=.5)
+
+    EXAMPLE - Jupyter Notebook Soup-to-nuts:
+
+       >>> #Ryan Burgert 2024
+       ... #Run this in a Jupyter notebook code cell for a realtime preview!
+       ... 
+       ... #Setup:
+       ... #    Run this in a Jupyter Notebook on a computer with at least one GPU
+       ... #        `sudo apt install ffmpeg git`
+       ... #        `pip install rp`
+       ... #    The first time you run this it might be a bit slow (it will download necessary models)
+       ... #    The `rp` package will take care of installing the rest of the python packages for you
+       ... 
+       ... import rp
+       ... 
+       ... rp.git_import('CommonSource') #If missing, installs code from https://github.com/RyannDaGreat/CommonSource
+       ... import rp.git.CommonSource.noise_warp as nw
+       ... 
+       ... FRAME = 2**-1 #We immediately resize the input frames by this factor, before calculating optical flow
+       ...               #The flow is calulated at (input size) × FRAME resolution.
+       ...               #Higher FLOW values result in slower optical flow calculation and higher intermediate noise resolution
+       ...               #Larger is not always better - watch the preview in Jupyter to see if it looks good!
+       ... FLOW = 2**4   #Then, we use bilinear interpolation to upscale the flow by this factor
+       ...               #We warp the noise at (input size) × FRAME × FLOW resolution
+       ...               #The noise is then downsampled back to (input size)
+       ...               #Higher FLOW values result in more temporally consistent noise warping at the cost of higher VRAM usage and slower inference time
+       ... LATENT = 8    #We further downsample the outputs by this amount - because 8 pixels wide corresponds to one latent wide in Stable Diffusion
+       ...               #The final output size is (input size) ÷ LATENT regardless of FRAME and FLOW
+       ... 
+       ... LATENT = 2    #Uncomment this line for a prettier visualization! But for any Stable-Diffusion based model, use LATENT=8
+       ... 
+       ... 
+       ... #You can pass a glob of image files
+       ... images = "/path_to_images/cam_*_color.png"
+       ... 
+       ... #You can also use video files or URLs
+       ... images = "https://www.shutterstock.com/shutterstock/videos/1100085499/preview/stock-footage-bremen-germany-october-old-style-carousel-moving-on-square-in-city-horses-on-traditional.webm"
+       ... 
+       ... output_folder = rp.get_folder_name(rp.get_parent_folder(images))
+       ... 
+       ... #See this function's docstring for more information!
+       ... output = nw.get_noise_from_video(
+       ...     images,
+       ...     remove_background=False, #Set this to True to matte the foreground - and force the background to have no flow
+       ...     visualize=True,          #Generates nice visualization videos and previews in Jupyter notebook
+       ...     save_files=True,         #Set this to False if you just want the noises without saving to a numpy file
+       ...     
+       ...     noise_channels=4,
+       ...     output_folder=output_folder,
+       ...     resize_frames=FRAME,
+       ...     resize_flow=FLOW,
+       ...     downscale_factor=round(FRAME * FLOW) * LATENT,
+       ... );
+       ... 
+       ... print("Noise shape:"  ,output.numpy_noises.shape())
+       ... print("Flow shape:"   ,output.numpy_flows .shape())
+       ... print("Output folder:",output.output_folder)
+
     """
 
     #Input assertions
