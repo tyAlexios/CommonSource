@@ -850,7 +850,7 @@ def get_noise_from_video(
     """
 
     #Input assertions
-    assert isinstance(resize_flow, int) and resize_flow >= 1
+    assert isinstance(resize_flow, int) and resize_flow >= 1, resize_flow
 
     if device is None:
         if rp.currently_running_mac():
@@ -862,13 +862,13 @@ def get_noise_from_video(
 
     # Load video frames into a [T, H, W, C] numpy array, where C=3 and values are between 0 and 1
     # Can be specified as an MP4, a folder that contains images, or a glob like /path/to/*.png
-    assert rp.is_numpy_array(video_path) or isinstance(video_path, str)
+    assert rp.is_numpy_array(video_path) or isinstance(video_path, str), type(video_path)
     if rp.is_video_file(video_path) or rp.is_valid_url(video_path):
         video_frames = rp.load_video(video_path)
     elif rp.is_numpy_array(video_path):
         #We can also pass a numpy video as an input in THWC form
         video_frames = video_path
-        assert video_frames.ndim==4
+        assert video_frames.ndim==4, video_frames.ndim
         video_path = rp.get_unique_copy_path('noisewarp_video.mp4')
     else:
         if rp.is_a_folder(video_path):
@@ -881,7 +881,7 @@ def get_noise_from_video(
         video_frames = rp.load_images(frame_paths, show_progress=True)
 
     if video_preprocessor is not None:
-        assert callable(video_preprocessor)
+        assert callable(video_preprocessor), type(video_preprocessor)
         video_frames = rp.as_numpy_array(video_frames)
         video_frames = video_preprocessor(video_frames)
 
