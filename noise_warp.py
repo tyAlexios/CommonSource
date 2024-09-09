@@ -925,10 +925,11 @@ def get_noise_from_video(
         rp.fansi_print("WARNING: height {h} or width{w} is not divisible by the downscale_factor {downscale_factor}. This will lead to artifacts in the noise.")
 
     # Decide the location of and create the output folder
-    if output_folder is None:
-        output_folder = "outputs/" + rp.get_file_name(video_path, include_file_extension=False)
-    output_folder = rp.make_directory(rp.get_unique_copy_path(output_folder))
-    rp.fansi_print("Output folder: " + output_folder, "green")
+    if save_files:
+        if output_folder is None:
+            output_folder = "outputs/" + rp.get_file_name(video_path, include_file_extension=False)
+        output_folder = rp.make_directory(rp.get_unique_copy_path(output_folder))
+        rp.fansi_print("Output folder: " + output_folder, "green")
 
     with torch.no_grad():
 
