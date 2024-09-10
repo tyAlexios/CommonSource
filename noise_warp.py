@@ -428,6 +428,20 @@ def demo_webcam_noise_warp():
     main()
 
 
+@rp.memoized
+def _xy_meshgrid(h,w,device,dtype):
+    y, x = torch.meshgrid(
+        torch.arange(h),
+        torch.arange(w),
+    )
+
+    output = torch.stack(
+        [x, y],
+    ).to(device, dtype)
+
+    assert output.shape == (2, h, w)
+    return output
+
 def xy_meshgrid_like_image(image):
     """
     Example:
@@ -439,19 +453,7 @@ def xy_meshgrid_like_image(image):
     """
     assert image.ndim == 3, "image is in CHW form"
     c, h, w = image.shape
-
-    y, x = torch.meshgrid(
-        torch.arange(h),
-        torch.arange(w),
-    )
-
-    output = torch.stack(
-        [x, y],
-    ).to(image.device, image.dtype)
-
-    assert output.shape == (2, h, w)
-    return output
-
+    return _xy_meshgrid(h,w,image.device,image.dtype)
 
 def noise_to_xyωc(noise):
     assert noise.ndim == 3, "noise is in CHW form"
