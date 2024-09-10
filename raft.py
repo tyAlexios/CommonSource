@@ -20,25 +20,28 @@ class RaftOpticalFlow(rp.CachedInstances):
         self.model = model
 
     def _preprocess_image(self, image):
-        assert rp.is_image(image)
+        assert rp.is_image(image) or rp.is_torch_image(image), type(image)
         
-        image = rp.as_float_image(rp.as_rgb_image(image))
+        if rp.is_image(image):
+            image = rp.as_float_image(rp.as_rgb_image(image))
+            image = rp.as_torch_image(image)
+
+        image = image.to(self.device)
+        image = image.float()
 
         #Floor height and width to the nearest multpiple of 8
         height, width = rp.get_image_dimensions(image)
         new_height = (height // 8) * 8
         new_width  = (width  // 8) * 8
 
-        T = torchvision.transforms
-        transforms = T.Compose(
-            [
-                T.ToTensor(),
-                T.Normalize(mean=0.5, std=0.5),  # map [0, 1] into [-1, 1]
-                T.Resize(size=(new_height, new_width)),
-            ]
-        )
-        
-        output = transforms(image)[None].to(self.device).float()
+        #Resize the image
+        image = rp.torch_resize_image(image, (new_height, new_width), copy=False)
+
+        #Map [0, 1] to [-1, 1]
+        image = image * 2 - 1
+
+        #CHW --> 1CHW
+        output = image[None]
 
         assert rp.is_torch_tensor(output)
         assert output.shape == (1, 3, new_height, new_width)
