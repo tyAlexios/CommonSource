@@ -5,6 +5,9 @@ from torchvision.models.optical_flow import raft_large, raft_small
 
 class RaftOpticalFlow(rp.CachedInstances):
     def __init__(self, device, version='large'):
+        """
+        Automatically downloads the model you select upon instantiation if not already downloaded
+        """
 
         models = {
             'large' : raft_large,
@@ -49,6 +52,17 @@ class RaftOpticalFlow(rp.CachedInstances):
         return output
     
     def __call__(self, from_image, to_image):
+        """
+        Calculates the optical flow from from_image to to_image, returned in 2HW form
+        In other words, returns (dx, dy) where dx and dy are both HW torch matrices with the same height and width as the input image
+
+        Works best when the image's dimensions are multiple of 8 pixels
+        Works fastest when passed torch images on the same device as this model
+
+        Args:
+            from_image: Can be an image as defined by rp.is_image, or an RGB torch image (a 3HW torch tensor)
+            to_image  : Can be an image as defined by rp.is_image, or an RGB torch image (a 3HW torch tensor)
+        """
         assert rp.is_image(from_image)
         assert rp.is_image(to_image)
         assert rp.get_image_dimensions(from_image) == rp.get_image_dimensions(to_image)
