@@ -949,9 +949,11 @@ def get_noise_from_video(
 
         prev_video_frame = video_frames[0]
         noise = warper.noise
+
         down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
+        down_noise = down_noise * downscale_factor #Adjust for STD
         
-        numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16) # In HWC form
+        numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16) # In HWC form. Using float16 to save RAM, but it might cause problems on come CPU
 
         numpy_noises = [numpy_noise]
         numpy_flows = []
