@@ -924,6 +924,11 @@ def get_noise_from_video(
     if h%downscale_factor or w%downscale_factor:
         rp.fansi_print("WARNING: height {h} or width{w} is not divisible by the downscale_factor {downscale_factor}. This will lead to artifacts in the noise.")
 
+    def downscale_noise(noise):
+        down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
+        down_noise = down_noise * downscale_factor #Adjust for STD
+        return down_noise
+
     # Decide the location of and create the output folder
     if save_files:
         if output_folder is None:
@@ -950,9 +955,7 @@ def get_noise_from_video(
         prev_video_frame = video_frames[0]
         noise = warper.noise
 
-        down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
-        down_noise = down_noise * downscale_factor #Adjust for STD
-        
+        down_noise = downscale_noise(noise)
         numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16) # In HWC form. Using float16 to save RAM, but it might cause problems on come CPU
 
         numpy_noises = [numpy_noise]
@@ -974,8 +977,7 @@ def get_noise_from_video(
                 )
                 numpy_flows.append(numpy_flow)
 
-                down_noise = rp.torch_resize_image(noise, 1/downscale_factor, interp='area') #Avg pooling
-                down_noise = down_noise * downscale_factor #Adjust for STD
+                down_noise = downscale_noise(noise)
 
                 numpy_noise = rp.as_numpy_image(down_noise).astype(np.float16)
 
