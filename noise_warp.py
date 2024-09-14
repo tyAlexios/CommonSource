@@ -712,8 +712,8 @@ def blend_noise(noise_background, noise_foreground, alpha):
 
 def mix_new_noise(noise, alpha):
     """As alpha --> 1, noise is destroyed"""
-    if isinstance(noise, torch.Tensor): blend_noise(noise, torch.randn_like(noise)      , alpha)
-    elif isinstance(noise, np.ndarray): blend_noise(noise, np.random.randn(*noise.shape), alpha)
+    if isinstance(noise, torch.Tensor): return blend_noise(noise, torch.randn_like(noise)      , alpha)
+    elif isinstance(noise, np.ndarray): return blend_noise(noise, np.random.randn(*noise.shape), alpha)
     else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
 
     
