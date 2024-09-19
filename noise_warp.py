@@ -618,6 +618,7 @@ class NoiseWarper:
         scale_factor=1,
         post_noise_alpha = 0,
         progressive_noise_alpha = 0,
+        warp_kwargs=dict(),
     ):
 
         #Some non-exhaustive input assertions
@@ -635,6 +636,7 @@ class NoiseWarper:
         self.scale_factor=scale_factor
         self.progressive_noise_alpha=progressive_noise_alpha
         self.post_noise_alpha=post_noise_alpha
+        self.warp_kwargs=warp_kwargs
 
         #Initialize the state
         self._state = self._noise_to_state(
@@ -704,7 +706,7 @@ class NoiseWarper:
         if self.progressive_noise_alpha:
             state[3:] = mix_new_noise(state[3:], self.progressive_noise_alpha)
 
-        return warp_xyωc(state, flow)
+        return warp_xyωc(state, flow, **self.warp_kwargs)
     
 def blend_noise(noise_background, noise_foreground, alpha):
     """ Variance-preserving blend """
@@ -731,6 +733,7 @@ def get_noise_from_video(
     progressive_noise_alpha = 0,
     post_noise_alpha = 0,
     remove_background=False,
+    warp_kwargs=dict(),
 ):
     """
     Extract noise from a video by warping random noise using optical flow between consecutive frames.
@@ -764,6 +767,7 @@ def get_noise_from_video(
         progressive_noise_alpha: For ryan, don't worry about it
         post_noise_alpha: For ryan, don't worry about it
         remove_background: If true will attempt to matte out the background and composite the computed noise on that background
+        warp_kwargs (dict, optional): For experimental features. Don't worry about this if you're not Ryan Burgert.
 
     Returns:
         EasyDict: A dict containing the following keys:
@@ -952,6 +956,7 @@ def get_noise_from_video(
             device = device,
             post_noise_alpha = post_noise_alpha,
             progressive_noise_alpha = progressive_noise_alpha,
+            warp_kwargs = warp_kwargs,
         )
 
         prev_video_frame = video_frames[0]
