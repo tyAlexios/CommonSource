@@ -1110,4 +1110,4 @@ def get_noise_from_video(
     return rp.gather_vars('numpy_noises numpy_flows vis_frames output_folder')
 
 if __name__ == '__main__':
-    fire.Fire(get_noise_from_video)
+    fire.Fire(dict(rp.gather_vars('get_noise_from_video demo_webcam_noise_warp')))
