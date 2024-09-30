@@ -770,6 +770,7 @@ def get_noise_from_video(
     progressive_noise_alpha = 0,
     post_noise_alpha = 0,
     remove_background=False,
+    visualize_flow_sensitivity=None,
     warp_kwargs=dict(),
 ):
     """
@@ -804,6 +805,7 @@ def get_noise_from_video(
         progressive_noise_alpha: For ryan, don't worry about it
         post_noise_alpha: For ryan, don't worry about it
         remove_background: If true will attempt to matte out the background and composite the computed noise on that background
+        visualize_flow_sensitivity (float, optional): If specified, will normalize flow with the assumption that this given value is the max magnitude
         warp_kwargs (dict, optional): For experimental features. Don't worry about this if you're not Ryan Burgert.
 
     Returns:
@@ -886,8 +888,8 @@ def get_noise_from_video(
        ...     downscale_factor=round(FRAME * FLOW) * LATENT,
        ... );
        ... 
-       ... print("Noise shape:"  ,output.numpy_noises.shape())
-       ... print("Flow shape:"   ,output.numpy_flows .shape())
+       ... print("Noise shape:"  ,output.numpy_noises.shape)
+       ... print("Flow shape:"   ,output.numpy_flows .shape)
        ... print("Output folder:",output.output_folder)
 
     """
@@ -1035,7 +1037,7 @@ def get_noise_from_video(
                 numpy_noises.append(numpy_noise)
 
                 if visualize:
-                    flow_rgb = rp.optical_flow_to_image(dx, dy)
+                    flow_rgb = rp.optical_flow_to_image(dx, dy, sensitivity = visualize_flow_sensitivity)
 
                     #Turn the noise into a numpy HWC RGB array
                     down_noise_image = np.zeros((*numpy_noise.shape[:2], 3))
@@ -1073,6 +1075,7 @@ def get_noise_from_video(
                                     "Optical Flow",
                                     "Overlaid",
                                 ] + optional_labels,
+                                font = 'G:Zilla Slab',
                             )
                         )
                     )
