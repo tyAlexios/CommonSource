@@ -718,17 +718,21 @@ def mix_new_noise(noise, alpha):
     elif isinstance(noise, np.ndarray): return blend_noise(noise, np.random.randn(*noise.shape), alpha)
     else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
 
-def resize_noise(noise, new_height, new_width, alpha=None):
+def resize_noise(noise, size, alpha=None):
     """
     Can resize gaussian noise, adjusting for variance and preventing cross-correlation
     """
+    assert noise.ndim == 3, "resize_noise: noise should be a CHW tensor"
+    num_channels, old_height, old_width = noise.shape
 
     if noise.ndim==4:
         #If given a batch of noises, do it for each one
         return torch.stack([resize_noise(x, new_height, new_width) for x in noise])
 
-    assert noise.ndim == 3, "resize_noise: noise should be a CHW tensor"
-    num_channels, old_height, old_width = noise.shape
+    if rp.is_number(size):
+        new_height, new_width = int(old_height * size), int(old_width * size)
+    else:
+        new_height, new_width = size
 
     assert new_height<=old_height, 'resize_noise: Only useful for shrinking noise, not growing it'
     assert new_width <=old_width , 'resize_noise: Only useful for shrinking noise, not growing it'
@@ -746,13 +750,13 @@ def resize_noise(noise, new_height, new_width, alpha=None):
         assert alpha.shape==noise.shape[1:],(alpha.shape,noise.shape)
         noise=torch.cat((alpha[None],noise))
         
-    resized = torch_scatter_add_image(
+    resized = r.ptorch_scatter_add_image(
         noise,
         x,
         y,
         height=new_height,
         width=new_width,
-        interp='round',
+        interp='floor',
         prepend_ones=alpha is None
     )
     
