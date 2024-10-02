@@ -750,7 +750,7 @@ def resize_noise(noise, size, alpha=None):
         assert alpha.shape==noise.shape[1:],(alpha.shape,noise.shape)
         noise=torch.cat((alpha[None],noise))
         
-    resized = r.ptorch_scatter_add_image(
+    resized = rp.torch_scatter_add_image(
         noise,
         x,
         y,
