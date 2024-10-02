@@ -37,7 +37,7 @@ def unique_pixels(image):
     flattened_pixels = rearrange(pixels, "h w c -> (h w) c")
 
     # Find unique RGB values, counts, and inverse indices
-    unique_colors, inverse_indices, counts = torch.unique(flattened_pixels, dim=0, return_inverse=True, return_counts=True)
+    unique_colors, inverse_indices, counts = torch.unique(flattened_pixels, dim=0, return_inverse=True, return_counts=True, sorted=False)
 
     # Get the number of unique indices
     u = unique_colors.shape[0]
