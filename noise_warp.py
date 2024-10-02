@@ -718,7 +718,7 @@ def mix_new_noise(noise, alpha):
     elif isinstance(noise, np.ndarray): return blend_noise(noise, np.random.randn(*noise.shape), alpha)
     else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
 
-def resize_noise(noise, new_height, new_width):
+def resize_noise(noise, new_height, new_width, alpha=None):
     """
     Can resize gaussian noise, adjusting for variance and preventing cross-correlation
     """
@@ -740,16 +740,22 @@ def resize_noise(noise, new_height, new_width):
         max_y=new_height,
     )
 
-    resized = rp.torch_scatter_add_image(
+    if alpha is not None:
+        #Prepend the alpha
+        assert alpha.ndim==2,alpha.shape
+        assert alpha.shape==noise.shape[1:],(alpha.shape,noise.shape)
+        noise=torch.cat((alpha[None],noise))
+        
+    resized = torch_scatter_add_image(
         noise,
         x,
         y,
         height=new_height,
         width=new_width,
-        interp="floor",
-        prepend_ones=True,
+        interp='round',
+        prepend_ones=alpha is None
     )
-
+    
     total, resized = resized[:1], resized[1:]
 
     adjusted = resized / total**.5
