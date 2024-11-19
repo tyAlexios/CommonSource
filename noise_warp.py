@@ -470,7 +470,13 @@ def xyωc_to_noise(xyωc):
     noise=xyωc[3:]
     return noise
 
-def warp_xyωc(I, F, xy_mode='none',expand_only=False):
+def warp_xyωc(I, F, 
+               #USED FOR ABLATIONS:
+               xy_mode='none',
+               expand_only=False,
+               regauss=True,
+               interp='nearest',
+               ):
     #Input assertions
     assert F.device==I.device
     assert F.ndim==3, str(F.shape)+' F stands for flow, and its in [x y]·h·w form'
@@ -509,15 +515,16 @@ def warp_xyωc(I, F, xy_mode='none',expand_only=False):
     #It doesn't actually make deep sense to copy the offsets during this step, but it doesn't seem to hurt either...
     #BUT I think I got slightly better results...?...so I'm going to do it anyway.
     # pre_expand[:xy] = init[:xy] # <---- Original algorithm I wrote on paper
-    pre_expand[:xy] = rp.torch_remap_image(I[:xy], * -F.round(), relative=True, interp="nearest")# <---- Last minute change
+    pre_expand[:xy] = rp.torch_remap_image(I[:xy], * -F.round(), relative=True, interp=interp)# <---- Last minute change
     
-    pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp="nearest")
+    pre_expand[-ωc:] = rp.torch_remap_image(I[-ωc:], * -F.round(), relative=True, interp=interp)
     pre_expand[ω][pre_expand[ω]==0]=1 #Give new noise regions a weight of 1 - effectively setting it to init there
 
     if expand_only:
         #This is an ablation option - simple warp + regaussianize
         #Enable to preview expansion-only noise warping
-        pre_expand[-c:]=regaussianize(pre_expand[-c:])[0]
+        if regauss:
+            pre_expand[-c:]=regaussianize(pre_expand[-c:])[0]
         return pre_expand
 
     #Calculate initial pre-shrink
