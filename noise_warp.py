@@ -527,7 +527,7 @@ def warp_xyωc(I, F,
             pre_expand[-c:]=regaussianize(pre_expand[-c:])[0]
         else:
             #Turn zeroes to noise
-            pre_expand[-c:]=torch.randn_like(pre_expand[-c:]) * pre_expand[-c:]==0 + pre_expand[-c:]
+            pre_expand[-c:]=torch.randn_like(pre_expand[-c:]) * (pre_expand[-c:]==0) + pre_expand[-c:]
         return pre_expand
 
     #Calculate initial pre-shrink
