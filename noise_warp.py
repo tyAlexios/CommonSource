@@ -38,6 +38,7 @@ def unique_pixels(image):
 
     # Find unique RGB values, counts, and inverse indices
     unique_colors, inverse_indices, counts = torch.unique(flattened_pixels, dim=0, return_inverse=True, return_counts=True, sorted=False)
+    # unique_colors, inverse_indices, counts = torch.unique_consecutive(flattened_pixels, dim=0, return_inverse=True, return_counts=True)
 
     # Get the number of unique indices
     u = unique_colors.shape[0]
@@ -203,8 +204,58 @@ def starfield_zoom(h, w, frame):
     
     return dx, dy
 
-def warp_noise(noise, dx, dy, s=4):
+_arange_cache={}
+def _cached_arange(length, device, dtype):
+    code=hash((length,device,dtype))
+    if code in _arange_cache:
+        return _arange_cache[code]
+
+    
+    _arange_cache[code]= torch.arange(length , device=device, dtype=dtype)
+    return _arange_cache[code]
+
+def fast_nearest_torch_remap_image(image, x, y, *, relative=False, add_alpha_mask=False, use_cached_meshgrid=False):
+    # assert rp.r.is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
+    # assert is_torch_tensor(x) and is_a_matrix(x), "x must be a torch tensor with shape [H_out, W_out]"
+    # assert is_torch_tensor(y) and is_a_matrix(y), "y must be a torch tensor with shape [H_out, W_out]"
+    # assert x.shape == y.shape, "x and y must have the same shape, but got x.shape={} and y.shape={}".format(x.shape, y.shape)
+    # assert image.device==x.device==y.device, "all inputs must be on the same device"
+
+    # pip_import('torch')
+
+    import torch
+
+    in_c, in_height, in_width = image.shape
+    out_height, out_width = x.shape
+
+    if add_alpha_mask:
+        alpha_mask = torch.ones_like(image[:1])
+        image = torch.cat([image, alpha_mask], dim=0)
+
+    if torch.is_floating_point(x): x = x.round_().long()
+    if torch.is_floating_point(y): y = y.round_().long()
+
+    if relative:
+        # assert in_height == out_height, "For relative warping, input and output heights must match, but got in_height={} and out_height={}".format(in_height, out_height)
+        # assert in_width  == out_width , "For relative warping, input and output widths must match, but got in_width={} and out_width={}".format(in_width, out_width)
+        x += _cached_arange(in_width , device=x.device, dtype=x.dtype)
+        y += _cached_arange(in_height, device=y.device, dtype=y.dtype)[:,None]
+
+    x.clamp_(0, in_width - 1)
+    y.clamp_(0,in_height-1)
+    out = image[:, y, x]
+
+    expected_c = in_c+1 if add_alpha_mask else in_c
+    assert out.shape == (expected_c, out_height, out_width), "Expected output shape: ({}, {}, {}), but got: {}".format(expected_c, out_height, out_width, out.shape)
+
+    return out
+
+
+def warp_noise(noise, dx, dy, s=1):
     #This is *certainly* imperfect. We need to have particle swarm in addition to this.
+
+    dx=dx.round_().int()
+    dy=dy.round_().int()
 
     c, h, w = noise.shape
     assert dx.shape==(h,w)
@@ -215,34 +266,42 @@ def warp_noise(noise, dx, dy, s=4):
     ws = w * s
     
     #Upscale the warping with linear interpolation. Also scale it appropriately.
-    up_dx = rp.torch_resize_image(dx[None], (hs, ws), interp="bilinear")[0]
-    up_dy = rp.torch_resize_image(dy[None], (hs, ws), interp="bilinear")[0]
-    up_dx *= s
-    up_dy *= s
+    if s!=1:
+        up_dx = rp.torch_resize_image(dx[None], (hs, ws), interp="bilinear")[0]
+        up_dy = rp.torch_resize_image(dy[None], (hs, ws), interp="bilinear")[0]
+        up_dx *= s
+        up_dy *= s
 
-    up_noise = rp.torch_resize_image(noise, (hs, ws), interp="nearest")
+        up_noise = rp.torch_resize_image(noise, (hs, ws), interp="nearest")
+    else:
+        up_dx = dx
+        up_dy = dy
+        up_noise = noise
     assert up_noise.shape == (c, hs, ws)
 
     # Warp the noise - and put 0 where it lands out-of-bounds
-    up_noise = rp.torch_remap_image(up_noise, up_dx, up_dy, relative=True, interp="nearest")
+    # up_noise = rp.torch_remap_image(up_noise, up_dx, up_dy, relative=True, interp="nearest")
+    up_noise = fast_nearest_torch_remap_image(up_noise, up_dx, up_dy, relative=True)
     assert up_noise.shape == (c, hs, ws)
     
     # Regaussianize the noise
     output, _ = regaussianize(up_noise)
 
     #Now we resample the noise back down again
-    output = rp.torch_resize_image(output, (h, w), interp='area')
-    output = output * s #Adjust variance by multiplying by sqrt of area, aka sqrt(s*s)=s
+    if s!=1:
+        output = rp.torch_resize_image(output, (h, w), interp='area')
+        output = output * s #Adjust variance by multiplying by sqrt of area, aka sqrt(s*s)=s
 
     return output
+
 
 def regaussianize(noise):
     c, hs, ws = noise.shape
 
     # Find unique pixel values, their indices, and counts in the pixelated noise image
-    unique_colors, counts, index_matrix = unique_pixels(noise)
+    unique_colors, counts, index_matrix = unique_pixels(noise[:1])
     u = len(unique_colors)
-    assert unique_colors.shape == (u, c)
+    assert unique_colors.shape == (u, 1)
     assert counts.shape == (u,)
     assert index_matrix.max() == u - 1
     assert index_matrix.min() == 0
