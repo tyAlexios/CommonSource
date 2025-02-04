@@ -807,6 +807,14 @@ def resize_noise(noise, size, alpha=None):
     """
     Can resize gaussian noise, adjusting for variance and preventing cross-correlation
     """
+
+    if rp.is_numpy_array(noise):
+        noise=rp.as_torch_image(noise)
+        output = resize_noise(noise, size, alpha)
+        output = rp.as_numpy_array(output)
+        output = einops.rearrange(output, "C H W -> H W C")
+        return output
+
     assert noise.ndim == 3, "resize_noise: noise should be a CHW tensor"
     num_channels, old_height, old_width = noise.shape
 
