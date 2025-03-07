@@ -1,6 +1,39 @@
+"""
+Sa2VA: State-of-the-art vision-language model for image/video understanding.
+
+This module provides simple functions to work with ByteDance's Sa2VA-4B model, 
+which handles both images and videos for:
+- Image and video captioning
+- Visual question answering 
+- Referring segmentation (generates pixel masks for objects)
+
+Functions automatically download the model on first use. No class initialization needed.
+
+Input formats:
+- Images: np.ndarray (HW3 uint8 or float 0-1), PIL Image, or path/URL
+- Videos: List of frames, path, or URL
+- Text: String prompts for questions or segmentation references
+
+Example:
+    caption = describe_image("photo.jpg")
+    answer = run_image_chat("photo.jpg", "What color is the car?")
+    mask = run_image_segmentation("photo.jpg", "the cat")
+
+See: https://huggingface.co/ByteDance/Sa2VA-4B
+"""
 import rp
 import torch
 from PIL import Image
+
+
+__all__ = [
+    "describe_image", 
+    "describe_video",
+    "run_image_chat", 
+    "run_video_chat",
+    "run_image_segmentation",
+    "run_video_segmentation"
+]
 
 
 _sa2va_device = None
