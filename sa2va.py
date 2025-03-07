@@ -148,12 +148,13 @@ def _load_video(video, num_frames=None):
     return video
 
 
-def _load_image(image):
+def _load_image(image, num_frames=None):
     """
     Load and preprocess an image for Sa2VA model input.
     
     Args:
         image: An image as path, URL, np.ndarray, or PIL.Image
+        num_frames: Unused, kept for compatibility with _load_video
         
     Returns:
         PIL.Image object ready for the model
@@ -249,11 +250,12 @@ def chat_video(video, prompt, device=None, *, num_frames=5) -> str:
         prompt: Text prompt for querying the model
         device: Optional device to run inference on. If any Sa2VA model has been 
                initialized previously, the most recent device becomes the default.
+        num_frames: Number of frames to process, evenly spaced from start to end of the video
         
     Returns:
         Text response from the model
     """
-    return _run_sa2va(video, prompt, is_video=True, device=device)
+    return _run_sa2va(video, prompt, is_video=True, device=device, num_frames=num_frames)
 
 
 def describe_image(image, device=None) -> str:
@@ -279,11 +281,12 @@ def describe_video(video, device=None, *, num_frames=5) -> str:
         video: List of frames, path, or URL 
         device: Optional device to run inference on. If any Sa2VA model has been 
                initialized previously, the most recent device becomes the default.
+        num_frames: Number of frames to process, evenly spaced from start to end of the video
         
     Returns:
         Text description of the video
     """
-    return _run_sa2va(video, "Generate a detailed description of the video.", is_video=True, device=device)
+    return _run_sa2va(video, "Generate a detailed description of the video.", is_video=True, device=device, num_frames=num_frames)
 
 
 def segment_image(image, prompt, device=None) -> tuple[str, list]:
@@ -295,7 +298,6 @@ def segment_image(image, prompt, device=None) -> tuple[str, list]:
         prompt: Text prompt describing what to segment (e.g., "Please segment the person")
         device: Optional device to run inference on. If any Sa2VA model has been 
                initialized previously, the most recent device becomes the default.
-        num_frames: 
         
     Returns:
         Tuple of (text_response, segmentation_masks)
@@ -305,7 +307,7 @@ def segment_image(image, prompt, device=None) -> tuple[str, list]:
     return _run_sa2va(image, prompt, is_video=False, device=device, return_masks=True)
 
 
-def segment_video(video, prompt, device=None, num_frames=None) -> tuple[str, list]:
+def segment_video(video, prompt, device=None, *, num_frames=None) -> tuple[str, list]:
     """
     Performs referring segmentation on a video based on the text prompt.
 
@@ -316,12 +318,14 @@ def segment_video(video, prompt, device=None, num_frames=None) -> tuple[str, lis
         prompt: Text prompt describing what to segment (e.g., "Please segment the person")
         device: Optional device to run inference on. If any Sa2VA model has been 
                initialized previously, the most recent device becomes the default.
+        num_frames: Number of frames to process, evenly spaced from start to end of the video.
+                   If None, uses all frames in the video.
         
     Returns:
         Tuple of (text_response, segmentation_masks)
         - text_response: The model's text response
         - segmentation_masks: List of binary masks for each frame
     """
-    return _run_sa2va(video, prompt, is_video=True, device=device, return_masks=True)
+    return _run_sa2va(video, prompt, is_video=True, device=device, return_masks=True, num_frames=num_frames)
 
 
