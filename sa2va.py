@@ -81,12 +81,6 @@ def _get_sa2va_model_helper(path, device):
 
     from transformers import AutoTokenizer, AutoModel
 
-    if device is None:
-        device = _default_sa2va_device()
-    else:
-        global _sa2va_device
-        _sa2va_device = device
-
     # load the model
     model = AutoModel.from_pretrained(
         path,
@@ -96,11 +90,11 @@ def _get_sa2va_model_helper(path, device):
         trust_remote_code=True,
     ).eval()
 
-    model = model.to(device)
-
     model.tokenizer = AutoTokenizer.from_pretrained(
         path, trust_remote_code=True, use_fast=False
     )
+
+    model = model.to(device)
 
     return model
 
@@ -118,6 +112,15 @@ def _get_sa2va_model(path="ByteDance/Sa2VA-4B", device=None):
     Returns:
         model
     """
+
+    #The helper is cached with respect to device, so normalize that here
+    if device is None:
+        device = _default_sa2va_device()
+    else:
+        global _sa2va_device
+        _sa2va_device = device
+    device = torch.device(device)
+
     return _get_sa2va_model_helper(path, device)
 
 
@@ -210,8 +213,8 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
     }
     
     # Run the model
-    with torch.no_grad():
-        return_dict = model.predict_forward(**input_dict)
+    with model.device, torch.no_grad():
+        return_dict = model(**input_dict)
 
     if debug:
         return return_dict
