@@ -56,7 +56,7 @@ def _default_sa2va_device():
     """
     global _sa2va_device
     if _sa2va_device is None:
-        _sa2va_device = rp.select_torch_device()
+        _sa2va_device = rp.select_torch_device(reserve=True)
     return _sa2va_device
 
 
