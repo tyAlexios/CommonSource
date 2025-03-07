@@ -302,7 +302,7 @@ def segment_image(image, prompt, device=None) -> tuple[str, list]:
     Returns:
         Tuple of (text_response, segmentation_masks)
         - text_response: The model's text response
-        - segmentation_masks: Binary masks for the referred objects
+        - segmentation_masks: Binary masks for the referred objects, all in HW form
     """
     return _run_sa2va(image, prompt, is_video=False, device=device, return_masks=True)
 
@@ -324,7 +324,7 @@ def segment_video(video, prompt, device=None, *, num_frames=None) -> tuple[str, 
     Returns:
         Tuple of (text_response, segmentation_masks)
         - text_response: The model's text response
-        - segmentation_masks: List of binary masks for each frame
+        - segmentation_masks: List of binary masks for each frame, all in THW form
     """
     return _run_sa2va(video, prompt, is_video=True, device=device, return_masks=True, num_frames=num_frames)
 
