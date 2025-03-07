@@ -172,7 +172,7 @@ def _load_image(image, num_frames=None):
     return image
 
 
-def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=False, num_frames=None) -> str | tuple[str, list]:
+def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=False, num_frames=None, debug=False) -> str | tuple[str, list]:
     """
     Internal helper function that handles both image and video inputs.
     
@@ -183,6 +183,7 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
         device: Device to run the model on
         return_masks: Whether to return segmentation masks
         num_frames: If is_video, only processes N frames of the video, evenly spaced from start to end
+        debug: If True, returns the raw output of the model. Use for developing this module only.
         
     Returns:
         String response or tuple of (response, masks) if return_masks=True
@@ -212,13 +213,16 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
     # Run the model
     with torch.no_grad():
         return_dict = model.predict_forward(**input_dict)
+
+    if debug:
+        return return_dict
     
     # Process the output
     predicted_text = return_dict["prediction"]
     predicted_text = predicted_text.rstrip("<|end|>")
     
     if return_masks and 'prediction_masks' in return_dict:
-        return predicted_text, return_dict['prediction_masks']
+        return predicted_text, return_dict['prediction_masks'][0]
     
     return predicted_text
 
@@ -302,7 +306,7 @@ def segment_image(image, prompt, device=None) -> tuple[str, list]:
     Returns:
         Tuple of (text_response, segmentation_masks)
         - text_response: The model's text response
-        - segmentation_masks: Binary masks for the referred objects, all in HW form
+        - segmentation_mask: bool np.ndarray: A binary mask, HW form
     """
     return _run_sa2va(image, prompt, is_video=False, device=device, return_masks=True)
 
@@ -324,7 +328,7 @@ def segment_video(video, prompt, device=None, *, num_frames=None) -> tuple[str, 
     Returns:
         Tuple of (text_response, segmentation_masks)
         - text_response: The model's text response
-        - segmentation_masks: List of binary masks for each frame, all in THW form
+        - segmentation_masks: bool np.ndarray: Binary masks for each frame, in THW form
     """
     return _run_sa2va(video, prompt, is_video=True, device=device, return_masks=True, num_frames=num_frames)
 
