@@ -220,36 +220,6 @@ def _run_sa2va(content, prompt, is_video=False, device=None, return_masks=False)
     return predicted_text
 
 
-def describe_image(image, device=None) -> str:
-    """
-    Image captioning: generates a description of the given image.
-    
-    Args:
-        image: np.ndarray, PIL Image, or path/URL
-        device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
-        
-    Returns:
-        Text description of the image
-    """
-    return _run_sa2va(image, "Generate a detailed description of the image.", is_video=False, device=device)
-
-
-def describe_video(video, device=None) -> str:
-    """
-    Video captioning: generates a description of the given video.
-    
-    Args:
-        video: List of frames, path, or URL 
-        device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
-        
-    Returns:
-        Text description of the video
-    """
-    return _run_sa2va(video, "Generate a detailed description of the video.", is_video=True, device=device)
-
-
 def run_image_chat(image, prompt, device=None) -> str:
     """
     Given an image and a text prompt, return text.
@@ -282,6 +252,36 @@ def run_video_chat(video, prompt, device=None) -> str:
         Text response from the model
     """
     return _run_sa2va(video, prompt, is_video=True, device=device)
+
+
+def describe_image(image, device=None) -> str:
+    """
+    Image captioning: generates a description of the given image.
+    
+    Args:
+        image: np.ndarray, PIL Image, or path/URL
+        device: Optional device to run inference on. If any Sa2VA model has been 
+               initialized previously, the most recent device becomes the default.
+        
+    Returns:
+        Text description of the image
+    """
+    return _run_sa2va(image, "Generate a detailed description of the image.", is_video=False, device=device)
+
+
+def describe_video(video, device=None) -> str:
+    """
+    Video captioning: generates a description of the given video.
+    
+    Args:
+        video: List of frames, path, or URL 
+        device: Optional device to run inference on. If any Sa2VA model has been 
+               initialized previously, the most recent device becomes the default.
+        
+    Returns:
+        Text description of the video
+    """
+    return _run_sa2va(video, "Generate a detailed description of the video.", is_video=True, device=device)
 
 
 def run_image_segmentation(image, prompt, device=None) -> tuple[str, list]:
