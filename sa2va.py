@@ -250,6 +250,23 @@ def describe_video(video, device=None) -> str:
     return _run_sa2va(video, "Generate a detailed description of the video.", is_video=True, device=device)
 
 
+def run_image_chat(image, prompt, device=None) -> str:
+    """
+    Given an image and a text prompt, return text.
+    Can answer questions about the image, etc.
+    
+    Args:
+        image: np.ndarray, PIL Image, or path/URL
+        prompt: Text prompt for querying the model
+        device: Optional device to run inference on. If any Sa2VA model has been 
+               initialized previously, the most recent device becomes the default.
+        
+    Returns:
+        Text response from the model
+    """
+    return _run_sa2va(image, prompt, is_video=False, device=device)
+
+
 def run_video_chat(video, prompt, device=None) -> str:
     """
     Given a video and a text prompt, return text.
@@ -303,18 +320,3 @@ def run_video_segmentation(video, prompt, device=None) -> tuple[str, list]:
     return _run_sa2va(video, prompt, is_video=True, device=device, return_masks=True)
 
 
-def run_image_chat(image, prompt, device=None) -> str:
-    """
-    Given an image and a text prompt, return text.
-    Can answer questions about the image, etc.
-    
-    Args:
-        image: np.ndarray, PIL Image, or path/URL
-        prompt: Text prompt for querying the model
-        device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
-        
-    Returns:
-        Text response from the model
-    """
-    return _run_sa2va(image, prompt, is_video=False, device=device)
