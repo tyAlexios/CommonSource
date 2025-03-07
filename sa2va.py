@@ -120,7 +120,7 @@ def _get_sa2va_model(path="ByteDance/Sa2VA-4B", device=None):
     return _get_sa2va_model_helper(path, device)
 
 
-def _load_video(video, num_frames=8):
+def _load_video(video, num_frames=None):
     """
     Load and preprocess a video for Sa2VA model input.
     
@@ -136,7 +136,8 @@ def _load_video(video, num_frames=8):
         video = rp.load_video(video)
 
     # Evenly space the frames
-    video = rp.resize_list(video, num_frames)
+    if num_frames is not None:
+        video = rp.resize_list(video, num_frames)
 
     # Convert to PIL images
     video = rp.as_numpy_images(video)
@@ -170,7 +171,7 @@ def _load_image(image):
     return image
 
 
-def _run_sa2va(content, prompt, is_video=False, device=None, return_masks=False) -> str | tuple[str, list]:
+def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=False, num_frames=None) -> str | tuple[str, list]:
     """
     Internal helper function that handles both image and video inputs.
     
@@ -180,6 +181,7 @@ def _run_sa2va(content, prompt, is_video=False, device=None, return_masks=False)
         is_video: Whether the content is a video
         device: Device to run the model on
         return_masks: Whether to return segmentation masks
+        num_frames: If is_video, only processes N frames of the video, evenly spaced from start to end
         
     Returns:
         String response or tuple of (response, masks) if return_masks=True
@@ -188,10 +190,10 @@ def _run_sa2va(content, prompt, is_video=False, device=None, return_masks=False)
     
     # Load and process the content
     if is_video:
-        content = _load_video(content)
+        content = _load_video(content, num_frames)
         content_key = "video"
     else:
-        content = _load_image(content)
+        content = _load_image(content, num_frames)
         content_key = "image"
     
     # Prepare the prompt
@@ -237,7 +239,7 @@ def chat_image(image, prompt, device=None) -> str:
     return _run_sa2va(image, prompt, is_video=False, device=device)
 
 
-def chat_video(video, prompt, device=None) -> str:
+def chat_video(video, prompt, device=None, *, num_frames=5) -> str:
     """
     Given a video and a text prompt, return text.
     Can caption videos or answer questions about it, etc.
@@ -269,7 +271,7 @@ def describe_image(image, device=None) -> str:
     return _run_sa2va(image, "Generate a detailed description of the image.", is_video=False, device=device)
 
 
-def describe_video(video, device=None) -> str:
+def describe_video(video, device=None, *, num_frames=5) -> str:
     """
     Video captioning: generates a description of the given video.
     
@@ -293,6 +295,7 @@ def segment_image(image, prompt, device=None) -> tuple[str, list]:
         prompt: Text prompt describing what to segment (e.g., "Please segment the person")
         device: Optional device to run inference on. If any Sa2VA model has been 
                initialized previously, the most recent device becomes the default.
+        num_frames: 
         
     Returns:
         Tuple of (text_response, segmentation_masks)
@@ -302,10 +305,12 @@ def segment_image(image, prompt, device=None) -> tuple[str, list]:
     return _run_sa2va(image, prompt, is_video=False, device=device, return_masks=True)
 
 
-def segment_video(video, prompt, device=None) -> tuple[str, list]:
+def segment_video(video, prompt, device=None, num_frames=None) -> tuple[str, list]:
     """
     Performs referring segmentation on a video based on the text prompt.
-    
+
+    Please don't pass in videos with too many frames! Under 100 frames ideally, even that might be too much...
+
     Args:
         video: List of frames, path, or URL
         prompt: Text prompt describing what to segment (e.g., "Please segment the person")
