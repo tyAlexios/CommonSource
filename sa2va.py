@@ -90,7 +90,7 @@ def _get_sa2va_model_helper(path, device):
         trust_remote_code=True,
     ).eval()
 
-    model.tokenizer = AutoTokenizer.from_pretrained(
+    model._tokenizer = AutoTokenizer.from_pretrained(
         path, trust_remote_code=True, use_fast=False
     )
 
@@ -210,6 +210,7 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
         "text": text_prompts,
         "past_text": "",
         "mask_prompts": None,
+        "tokenizer": model._tokenizer,
     }
     
     # Run the model
