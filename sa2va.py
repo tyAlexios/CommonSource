@@ -83,58 +83,55 @@ def _load_image(image):
     return image
 
 
-def describe_image(image, device=None) -> str:
+def _run_sa2va(content, prompt, is_video=False, device=None) -> str:
     """
-    Image captioning: generates a description of the given image.
+    Internal helper function that handles both image and video inputs.
     """
     model, tokenizer = _get_sa2va_model(device=device)
-
-    image = _load_image(image)
-
-    text_prompts = "<image>Generate a detailed description of the image."
-
+    
+    # Load and process the content
+    if is_video:
+        content = _load_video(content)
+        content_key = "video"
+    else:
+        content = _load_image(content)
+        content_key = "image"
+    
+    # Prepare the prompt
+    text_prompts = "<image>" + prompt
+    
+    # Build input dictionary
     input_dict = {
-        "image": image,
+        content_key: content,
         "text": text_prompts,
         "past_text": "",
         "mask_prompts": None,
         "tokenizer": tokenizer,
     }
-
+    
+    # Run the model
     with torch.no_grad():
         return_dict = model.predict_forward(**input_dict)
-
+    
+    # Process the output
     predicted_text = return_dict["prediction"]
     predicted_text = predicted_text.rstrip("<|end|>")
-
+    
     return predicted_text
+
+
+def describe_image(image, device=None) -> str:
+    """
+    Image captioning: generates a description of the given image.
+    """
+    return _run_sa2va(image, "Generate a detailed description of the image.", is_video=False, device=device)
 
 
 def describe_video(video, device=None) -> str:
     """
     Video captioning: generates a description of the given video.
     """
-    model, tokenizer = _get_sa2va_model(device=device)
-
-    video = _load_video(video)
-
-    text_prompts = "<image>Generate a detailed description of the video."
-
-    input_dict = {
-        "video": video,
-        "text": text_prompts,
-        "past_text": "",
-        "mask_prompts": None,
-        "tokenizer": tokenizer,
-    }
-
-    with torch.no_grad():
-        return_dict = model.predict_forward(**input_dict)
-
-    predicted_text = return_dict["prediction"]
-    predicted_text = predicted_text.rstrip("<|end|>")
-
-    return predicted_text
+    return _run_sa2va(video, "Generate a detailed description of the video.", is_video=True, device=device)
 
 
 def run_video_chat(video, prompt, device=None) -> str:
@@ -142,27 +139,7 @@ def run_video_chat(video, prompt, device=None) -> str:
     Given a video and a text prompt, return text.
     Can caption videos or answer questions about it, etc.
     """
-    model, tokenizer = _get_sa2va_model(device=device)
-
-    video = _load_video(video)
-
-    text_prompts = "<image>" + prompt
-
-    input_dict = {
-        "video": video,
-        "text": text_prompts,
-        "past_text": "",
-        "mask_prompts": None,
-        "tokenizer": tokenizer,
-    }
-
-    with torch.no_grad():
-        return_dict = model.predict_forward(**input_dict)
-
-    predicted_text = return_dict["prediction"]
-    predicted_text = predicted_text.rstrip("<|end|>")
-
-    return predicted_text
+    return _run_sa2va(video, prompt, is_video=True, device=device)
 
 
 def run_image_chat(image, prompt, device=None) -> str:
@@ -170,24 +147,4 @@ def run_image_chat(image, prompt, device=None) -> str:
     Given an image and a text prompt, return text.
     Can answer questions about the image, etc.
     """
-    model, tokenizer = _get_sa2va_model(device=device)
-
-    image = _load_image(image)
-
-    text_prompts = "<image>" + prompt
-
-    input_dict = {
-        "image": image,
-        "text": text_prompts,
-        "past_text": "",
-        "mask_prompts": None,
-        "tokenizer": tokenizer,
-    }
-
-    with torch.no_grad():
-        return_dict = model.predict_forward(**input_dict)
-
-    predicted_text = return_dict["prediction"]
-    predicted_text = predicted_text.rstrip("<|end|>")
-
-    return predicted_text
+    return _run_sa2va(image, prompt, is_video=False, device=device)
