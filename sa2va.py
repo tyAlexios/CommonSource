@@ -22,7 +22,7 @@ Example:
     answer = run_image_chat("photo.jpg", "What color is the car?")
     
     # Generate segmentation mask for a referred object
-    text, masks = run_image_segmentation("photo.jpg", "Please segment the cat")
+    text, masks = segment_image("photo.jpg", "Please segment the cat")
 
 See: https://huggingface.co/ByteDance/Sa2VA-4B
 """
@@ -36,8 +36,8 @@ __all__ = [
     "describe_video",
     "run_image_chat", 
     "run_video_chat",
-    "run_image_segmentation",
-    "run_video_segmentation"
+    "segment_image",
+    "segment_video"
 ]
 
 
@@ -284,7 +284,7 @@ def describe_video(video, device=None) -> str:
     return _run_sa2va(video, "Generate a detailed description of the video.", is_video=True, device=device)
 
 
-def run_image_segmentation(image, prompt, device=None) -> tuple[str, list]:
+def segment_image(image, prompt, device=None) -> tuple[str, list]:
     """
     Performs referring segmentation on an image based on the text prompt.
     
@@ -302,7 +302,7 @@ def run_image_segmentation(image, prompt, device=None) -> tuple[str, list]:
     return _run_sa2va(image, prompt, is_video=False, device=device, return_masks=True)
 
 
-def run_video_segmentation(video, prompt, device=None) -> tuple[str, list]:
+def segment_video(video, prompt, device=None) -> tuple[str, list]:
     """
     Performs referring segmentation on a video based on the text prompt.
     
