@@ -19,7 +19,7 @@ Example:
     caption = describe_image("photo.jpg")
     
     # Ask questions about an image
-    answer = run_image_chat("photo.jpg", "What color is the car?")
+    answer = chat_image("photo.jpg", "What color is the car?")
     
     # Generate segmentation mask for a referred object
     text, masks = segment_image("photo.jpg", "Please segment the cat")
@@ -34,8 +34,8 @@ from PIL import Image
 __all__ = [
     "describe_image", 
     "describe_video",
-    "run_image_chat", 
-    "run_video_chat",
+    "chat_image", 
+    "chat_video",
     "segment_image",
     "segment_video"
 ]
@@ -220,7 +220,7 @@ def _run_sa2va(content, prompt, is_video=False, device=None, return_masks=False)
     return predicted_text
 
 
-def run_image_chat(image, prompt, device=None) -> str:
+def chat_image(image, prompt, device=None) -> str:
     """
     Given an image and a text prompt, return text.
     Can answer questions about the image, etc.
@@ -237,7 +237,7 @@ def run_image_chat(image, prompt, device=None) -> str:
     return _run_sa2va(image, prompt, is_video=False, device=device)
 
 
-def run_video_chat(video, prompt, device=None) -> str:
+def chat_video(video, prompt, device=None) -> str:
     """
     Given a video and a text prompt, return text.
     Can caption videos or answer questions about it, etc.
