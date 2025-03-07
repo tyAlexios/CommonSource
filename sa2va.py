@@ -214,7 +214,7 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
     
     # Run the model
     with model.device, torch.no_grad():
-        return_dict = model(**input_dict)
+        return_dict = model.predict_forward(**input_dict)
 
     if debug:
         return return_dict
