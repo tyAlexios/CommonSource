@@ -72,7 +72,7 @@ def _get_sa2va_model_helper(path, device):
         device: Device to load the model on
         
     Returns:
-        Tuple of (model, tokenizer)
+        model
     """
     # These packages are needed
     rp.pip_import("timm")
@@ -87,7 +87,7 @@ def _get_sa2va_model_helper(path, device):
         global _sa2va_device
         _sa2va_device = device
 
-    # load the model and tokenizer
+    # load the model
     model = AutoModel.from_pretrained(
         path,
         torch_dtype=torch.bfloat16,
@@ -98,16 +98,16 @@ def _get_sa2va_model_helper(path, device):
 
     model = model.to(device)
 
-    tokenizer = AutoTokenizer.from_pretrained(
+    model.tokenizer = AutoTokenizer.from_pretrained(
         path, trust_remote_code=True, use_fast=False
     )
 
-    return model, tokenizer
+    return model
 
 
 def _get_sa2va_model(path="ByteDance/Sa2VA-4B", device=None):
     """
-    Get the Sa2VA model and tokenizer. Downloads from HuggingFace if not cached.
+    Get the Sa2VA model. Downloads from HuggingFace if not cached.
     The model will be loaded onto the specified device, or a default device 
     if none is specified. The device used becomes the new default device.
     
@@ -116,7 +116,7 @@ def _get_sa2va_model(path="ByteDance/Sa2VA-4B", device=None):
         device: Device to load the model on
         
     Returns:
-        Tuple of (model, tokenizer)
+        model
     """
     return _get_sa2va_model_helper(path, device)
 
@@ -188,7 +188,7 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
     Returns:
         String response or tuple of (response, masks) if return_masks=True
     """
-    model, tokenizer = _get_sa2va_model(device=device)
+    model = _get_sa2va_model(device=device)
     
     # Load and process the content
     if is_video:
@@ -207,7 +207,6 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
         "text": text_prompts,
         "past_text": "",
         "mask_prompts": None,
-        "tokenizer": tokenizer,
     }
     
     # Run the model
