@@ -317,8 +317,6 @@ def segment_video(video, prompt, device=None, *, num_frames=None) -> np.ndarray:
     """
     Performs referring segmentation on a video based on the text prompt.
 
-    Please don't pass in videos with too many frames! Under 100 frames ideally, even that might be too much...
-
     Args:
         video: List of frames, path, or URL
         prompt: Text prompt describing what to segment (e.g., "Please segment the person")
