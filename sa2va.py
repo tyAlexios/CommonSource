@@ -1,5 +1,5 @@
 """
-Sa2VA: State-of-the-art vision-language model for image/video understanding.
+Sa2VA: State-of-the-art vision-language model for image/video understanding (early 2025)
 
 This module provides simple functions to work with ByteDance's Sa2VA-4B model, 
 which handles both images and videos for:
@@ -148,13 +148,12 @@ def _load_video(video, num_frames=None):
     return video
 
 
-def _load_image(image, num_frames=None):
+def _load_image(image):
     """
     Load and preprocess an image for Sa2VA model input.
     
     Args:
         image: An image as path, URL, np.ndarray, or PIL.Image
-        num_frames: Unused, kept for compatibility with _load_video
         
     Returns:
         PIL.Image object ready for the model
@@ -195,7 +194,7 @@ def _run_sa2va(content, prompt, *, is_video=False, device=None, return_masks=Fal
         content = _load_video(content, num_frames)
         content_key = "video"
     else:
-        content = _load_image(content, num_frames)
+        content = _load_image(content)
         content_key = "image"
     
     # Prepare the prompt
@@ -236,7 +235,7 @@ def chat_image(image, prompt, device=None) -> str:
         image: np.ndarray, PIL Image, or path/URL
         prompt: Text prompt for querying the model
         device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
+                initialized previously, the most recent device becomes the default.
         
     Returns:
         Text response from the model
@@ -253,7 +252,7 @@ def chat_video(video, prompt, device=None, *, num_frames=5) -> str:
         video: List of frames, path, or URL
         prompt: Text prompt for querying the model
         device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
+                initialized previously, the most recent device becomes the default.
         num_frames: Number of frames to process, evenly spaced from start to end of the video
         
     Returns:
@@ -269,7 +268,7 @@ def describe_image(image, device=None) -> str:
     Args:
         image: np.ndarray, PIL Image, or path/URL
         device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
+                initialized previously, the most recent device becomes the default.
         
     Returns:
         Text description of the image
@@ -284,7 +283,7 @@ def describe_video(video, device=None, *, num_frames=5) -> str:
     Args:
         video: List of frames, path, or URL 
         device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
+                initialized previously, the most recent device becomes the default.
         num_frames: Number of frames to process, evenly spaced from start to end of the video
         
     Returns:
@@ -301,7 +300,7 @@ def segment_image(image, prompt, device=None) -> tuple[str, list]:
         image: np.ndarray, PIL Image, or path/URL
         prompt: Text prompt describing what to segment (e.g., "Please segment the person")
         device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
+                initialized previously, the most recent device becomes the default.
         
     Returns:
         Tuple of (text_response, segmentation_masks)
@@ -321,7 +320,7 @@ def segment_video(video, prompt, device=None, *, num_frames=None) -> tuple[str, 
         video: List of frames, path, or URL
         prompt: Text prompt describing what to segment (e.g., "Please segment the person")
         device: Optional device to run inference on. If any Sa2VA model has been 
-               initialized previously, the most recent device becomes the default.
+                initialized previously, the most recent device becomes the default.
         num_frames: Number of frames to process, evenly spaced from start to end of the video.
                    If None, uses all frames in the video.
         
