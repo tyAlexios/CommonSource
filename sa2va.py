@@ -330,4 +330,51 @@ def segment_video(video, prompt, device=None, *, num_frames=None) -> np.ndarray:
     """
     return _run_sa2va(video, prompt, is_video=True, device=device, return_masks=True, num_frames=num_frames)
 
+def demo():
+    """ 
+    Run this demo inside a Jupyter notebook!
+    It shows this model's capabilities
+    """
+    import rp
+
+    #Download and update this RP extension
+    rp.git_import('CommonSource',pull=True)
+    import rp.git.CommonSource.sa2va as sa2va
+
+    #Get our input video
+    video_url='https://videos.pexels.com/video-files/6507082/6507082-hd_1920_1080_25fps.mp4'
+    video=rp.load_video(video_url,use_cache=True)
+    video=rp.resize_video_to_fit(video, height=512, width=512, allow_growth=False) #Resize in both diections until it fits in a 512x512 box
+    video=rp.resize_list_to_fit(video, 120) #Keep up to this many frames, spaced evenly throughout the video
+
+    #Caption the video
+    description = sa2va.describe_video(video)
+    print("VIDEO DESCRIPTION:", description)
+
+    #Ask a question about the video
+    prompt = 'How many people are in this video?'
+    chat_output = sa2va.chat_video(video, prompt)
+    print("CHAT OUTPUT:",chat_output)
+
+    #Segment the video
+    man_masks   = sa2va.segment_video(video, 'Please segment the man'  )
+    woman_masks = sa2va.segment_video(video, 'Please segment the woman')
+    preview_video = rp.labeled_images(
+        rp.tiled_videos(
+            rp.labeled_videos(
+                [video, man_masks[..., None] * video, woman_masks[..., None] * video],
+                ["Input Video", "Man Masks", "Woman Masks"],
+                font="R:Futura",
+                show_progress=True,
+            ),
+            length=3,
+            show_progress=True,
+        ),
+        "SA2VA Demo",
+        size=30,
+        font="R:Futura",
+        text_color="yellow",
+        show_progress=True,
+    )
+    rp.display_video(preview_video, framerate=30)
 
