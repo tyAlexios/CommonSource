@@ -101,7 +101,7 @@ def _get_sa2va_model_helper(path, device):
         path, trust_remote_code=True, use_fast=False
     )
 
-    return rp.gather_vars("model tokenizer")
+    return model, tokenizer
 
 
 def _get_sa2va_model(path="ByteDance/Sa2VA-4B", device=None):
