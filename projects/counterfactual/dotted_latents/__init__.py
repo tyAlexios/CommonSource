@@ -16,7 +16,7 @@ import torch
 import numpy as np
 
 
-def _fast_scatter_add(output_tensor, latent_tracks, track_colors, num_timesteps, num_points, width, height):
+def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, num_timesteps, num_points, width, height):
     """
     Efficiently adds tracking point colors to a latent tensor using scatter_add.
     
@@ -38,6 +38,7 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, num_timesteps,
         output_tensor: Zero-initialized tensor to populate with values (LT, LC, LH, LW)
         latent_tracks: Tensor containing track coordinates (LT, N, 2)
         track_colors: Tensor of colors for each track point (N, LC)
+        visibility: Tensor indicating if each point is visible (LT, N)
         num_timesteps: Number of timesteps (LT)
         num_points: Number of track points (N)
         width: Width of latent tensor (LW)
@@ -51,8 +52,8 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, num_timesteps,
     # Extract x and y coordinates
     xs, ys = latent_tracks[..., 0], latent_tracks[..., 1]
     
-    # Create mask for valid coordinates (within bounds)
-    valid_mask = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+    # Create mask for valid coordinates (within bounds and visible)
+    valid_mask = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height) & (visibility > 0)
     
     # Loop over timesteps (still needed, but with vectorized inner operations)
     for t in range(num_timesteps):
@@ -212,26 +213,40 @@ def generate_dotted_latents(
         
         dotted_latent = torch.zeros(LT, LC, LH, LW, device=device, dtype=dtype)
         
-        # Use optimized scatter_add helper function
-        dotted_latent = _fast_scatter_add(dotted_latent, latent_tracks, track_colors, LT, N, LW, LH)
+        # Resize visibility to match latent_tracks timesteps
+        latent_visibility = rp.resize_list(visibility, LT)
+        
+        # Use optimized scatter_add helper function (now with visibility)
+        dotted_latent = _fast_scatter_add(
+            dotted_latent,
+            latent_tracks,
+            track_colors,
+            latent_visibility,
+            LT,
+            N,
+            LW,
+            LH,
+        )
         
         dotted_latents.append(dotted_latent)
     dotted_latents = torch.stack(dotted_latents)
     
     rp.validate_tensor_shapes(
-        videos        ='torch: B VT 3  VH VW',
-        dotted_latents='torch: B LT LC LH LW',
-        dotted_latent ='torch:   LT LC LH LW',
-        video         ='torch:   VT 3  VH VW',
-        mask          ='numpy:   VT    VH VW',
-        tracks        ='torch:  VT N XY',
-        visibility    ='torch:  VT N',
-        track_points  ='numpy:     N TXY', 
-        latent_tracks ='torch: LT  N XY',
-        latent_mask   ='       LT    LH LW',
-        track_colors  ='torch: N  LC',
+        videos            = 'torch: B VT   RGB VH VW',
+        dotted_latents    = 'torch: B LT   LC  LH LW',
+        dotted_latent     = 'torch:   LT   LC  LH LW',
+        video             = 'torch:   VT   RGB VH VW',
+        mask              = 'numpy:   VT       VH VW',
+        tracks            = 'torch:   VT N XY       ',
+        visibility        = 'torch:   VT N          ',
+        latent_visibility = 'torch:   LT N          ',
+        track_points      = 'numpy:      N TXY      ',
+        latent_tracks     = 'torch:   LT N XY       ',
+        latent_mask       = '         LT       LH LW',
+        track_colors      = 'torch:      N LC       ',
         XY  = 2,
         TXY = 3,
+        RGB = 3,
         **rp.gather_vars('N LC LT LH LW B VT VH VW'), #Already decided
         verbose = not silent and 'bold white random green',
     )
