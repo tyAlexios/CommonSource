@@ -22,7 +22,17 @@ import numpy as np
 default_visibility_mode = 'hide-invisible'
 
 
-def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, num_timesteps, num_points, width, height, visibility_mode=None):
+def _fast_scatter_add(
+    output_tensor,
+    latent_tracks,
+    track_colors,
+    visibility,
+    num_timesteps,
+    num_points,
+    width,
+    height,
+    visibility_mode=None,
+):
     """
     Efficiently adds tracking point colors to a latent tensor using scatter_add.
     
@@ -34,11 +44,13 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, nu
             color = track_colors[n]
             x, y = latent_tracks[lt, n].long()
             if 0<=x<LW and 0<=y<LH:
-                dotted_latent[lt, :, y, x] += color
+                # Check visibility if needed
+                if visibility_mode == 'show-invisible' or visibility[lt, n] > 0:
+                    dotted_latent[lt, :, y, x] += color
     ```
     
     This optimized version is like having a machine that can place all dots of the same color
-    simultaneously at their respective coordinates.
+    simultaneously at their respective coordinates, with the ability to filter out invisible dots.
     
     Args:
         output_tensor: Zero-initialized tensor to populate with values (LT, LC, LH, LW)
