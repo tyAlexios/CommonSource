@@ -16,7 +16,7 @@ import torch
 import numpy as np
 
 
-def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, num_timesteps, num_points, width, height):
+def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, num_timesteps, num_points, width, height, visibility_mode='hide-invisible'):
     """
     Efficiently adds tracking point colors to a latent tensor using scatter_add.
     
@@ -43,6 +43,9 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, nu
         num_points: Number of track points (N)
         width: Width of latent tensor (LW)
         height: Height of latent tensor (LH)
+        visibility_mode: How to handle point visibility:
+                        'hide-invisible': Only show dots that are visible (default)
+                        'show-invisible': Show all dots regardless of visibility
         
     Returns:
         torch.Tensor: Populated tensor with added track colors
@@ -52,8 +55,12 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, nu
     # Extract x and y coordinates
     xs, ys = latent_tracks[..., 0], latent_tracks[..., 1]
     
-    # Create mask for valid coordinates (within bounds and visible)
-    valid_mask = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height) & (visibility > 0)
+    # Create base mask for valid coordinates (within bounds)
+    valid_mask = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+    
+    # Apply visibility check if mode is 'hide-invisible'
+    if visibility_mode == 'hide-invisible':
+        valid_mask = valid_mask & (visibility > 0)
     
     # Loop over timesteps (still needed, but with vectorized inner operations)
     for t in range(num_timesteps):
@@ -152,6 +159,7 @@ def generate_dotted_latents(
     num_points=1024,
     device = None,
     silent = True,
+    visibility_mode = 'hide-invisible',
 ):
     """
     Generates a latent-tracking-point control video from a source video
@@ -167,6 +175,9 @@ def generate_dotted_latents(
         - num_points: The number of tracking points we use
         - device: Optional, if specified we use that torch device.
         - silent: If False, will print debug info.
+        - visibility_mode: How to handle point visibility, options are:
+                          'hide-invisible': Only show dots that are visible (default)
+                          'show-invisible': Show all dots regardless of visibility
 
     Returns:
         - torch.Tensor: BTCHW form (where B comes from videos, THW come from latent_mask, and C comes from out_channels)
@@ -216,7 +227,7 @@ def generate_dotted_latents(
         # Resize visibility to match latent_tracks timesteps
         latent_visibility = rp.resize_list(visibility, LT)
         
-        # Use optimized scatter_add helper function (now with visibility)
+        # Use optimized scatter_add helper function with visibility mode
         dotted_latent = _fast_scatter_add(
             dotted_latent,
             latent_tracks,
@@ -226,6 +237,7 @@ def generate_dotted_latents(
             N,
             LW,
             LH,
+            visibility_mode,
         )
         
         dotted_latents.append(dotted_latent)
@@ -258,7 +270,16 @@ def generate_dotted_latents(
 
     return rp.gather_vars('dotted_latents')
 
-def demo_dotted_latents(*video_urls):
+def demo_dotted_latents(*video_urls, visibility_mode='hide-invisible'):
+    """
+    Demonstrates the dotted latents functionality.
+    
+    Args:
+        video_urls: URLs of videos to use for demonstration
+        visibility_mode: How to handle point visibility:
+                        'hide-invisible': Only show dots that are visible (default)
+                        'show-invisible': Show all dots regardless of visibility
+    """
     video_urls = rp.detuple(video_urls) or ["https://video-previews.elements.envatousercontent.com/23ce1f71-c55d-4bc3-bfad-bc7bf8d8168a/watermarked_preview/watermarked_preview.mp4"]
     videos = rp.load_videos(video_urls, use_cache=True)
     videos = rp.resize_videos(videos,size=(480,720))
@@ -270,6 +291,7 @@ def demo_dotted_latents(*video_urls):
         np.ones((13, 60, 90)),
         out_channels=3,
         silent=False,
+        visibility_mode=visibility_mode,
     )
     [dotted_latent_video] = result.dotted_latents
     rp.ptoc("generate_dotted_latents")
