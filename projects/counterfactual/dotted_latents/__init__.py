@@ -46,8 +46,6 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, num_timesteps,
     Returns:
         torch.Tensor: Populated tensor with added track colors
     """
-    device = output_tensor.device
-    dtype = output_tensor.dtype
     C = track_colors.shape[1]  # Number of channels
     
     # Extract x and y coordinates
