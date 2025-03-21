@@ -9,14 +9,20 @@ The main function is `generate_dotted_latents` which creates a control video wit
 tracked dots that visualize motion patterns.
 """
 
-__all__ = ['generate_dotted_latents', 'demo_dotted_latents']
+__all__ = ['generate_dotted_latents', 'demo_dotted_latents', 'default_visibility_mode']
 
 import rp
 import torch
 import numpy as np
 
+# Global default for visibility mode
+# Options:
+# - 'hide-invisible': Only show dots that are visible
+# - 'show-invisible': Show all dots regardless of visibility
+default_visibility_mode = 'hide-invisible'
 
-def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, num_timesteps, num_points, width, height, visibility_mode='hide-invisible'):
+
+def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, num_timesteps, num_points, width, height, visibility_mode=None):
     """
     Efficiently adds tracking point colors to a latent tensor using scatter_add.
     
@@ -44,8 +50,9 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, nu
         width: Width of latent tensor (LW)
         height: Height of latent tensor (LH)
         visibility_mode: How to handle point visibility:
-                        'hide-invisible': Only show dots that are visible (default)
+                        'hide-invisible': Only show dots that are visible
                         'show-invisible': Show all dots regardless of visibility
+                        If None, uses the module's default_visibility_mode (default: 'hide-invisible')
         
     Returns:
         torch.Tensor: Populated tensor with added track colors
@@ -57,6 +64,10 @@ def _fast_scatter_add(output_tensor, latent_tracks, track_colors, visibility, nu
     
     # Create base mask for valid coordinates (within bounds)
     valid_mask = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+    
+    # Use global default if visibility_mode is None
+    if visibility_mode is None:
+        visibility_mode = default_visibility_mode
     
     # Apply visibility check if mode is 'hide-invisible'
     if visibility_mode == 'hide-invisible':
@@ -159,7 +170,7 @@ def generate_dotted_latents(
     num_points=1024,
     device = None,
     silent = True,
-    visibility_mode = 'hide-invisible',
+    visibility_mode = None,
 ):
     """
     Generates a latent-tracking-point control video from a source video
@@ -176,8 +187,9 @@ def generate_dotted_latents(
         - device: Optional, if specified we use that torch device.
         - silent: If False, will print debug info.
         - visibility_mode: How to handle point visibility, options are:
-                          'hide-invisible': Only show dots that are visible (default)
+                          'hide-invisible': Only show dots that are visible
                           'show-invisible': Show all dots regardless of visibility
+                          If None, uses the module's default_visibility_mode (default: 'hide-invisible')
 
     Returns:
         - torch.Tensor: BTCHW form (where B comes from videos, THW come from latent_mask, and C comes from out_channels)
@@ -270,15 +282,16 @@ def generate_dotted_latents(
 
     return rp.gather_vars('dotted_latents')
 
-def demo_dotted_latents(*video_urls, visibility_mode='hide-invisible'):
+def demo_dotted_latents(*video_urls, visibility_mode=None):
     """
     Demonstrates the dotted latents functionality.
     
     Args:
         video_urls: URLs of videos to use for demonstration
         visibility_mode: How to handle point visibility:
-                        'hide-invisible': Only show dots that are visible (default)
+                        'hide-invisible': Only show dots that are visible
                         'show-invisible': Show all dots regardless of visibility
+                        If None, uses the module's default_visibility_mode (default: 'hide-invisible')
     """
     video_urls = rp.detuple(video_urls) or ["https://video-previews.elements.envatousercontent.com/23ce1f71-c55d-4bc3-bfad-bc7bf8d8168a/watermarked_preview/watermarked_preview.mp4"]
     videos = rp.load_videos(video_urls, use_cache=True)
