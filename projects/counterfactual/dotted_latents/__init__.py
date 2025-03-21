@@ -247,13 +247,13 @@ def generate_dotted_latents(
 
 def demo_dotted_latents(*video_urls):
     video_urls = rp.detuple(video_urls) or ["https://video-previews.elements.envatousercontent.com/23ce1f71-c55d-4bc3-bfad-bc7bf8d8168a/watermarked_preview/watermarked_preview.mp4"]
-    videos = rp.load_video(video_urls, use_cache=True)
+    videos = rp.load_videos(video_urls, use_cache=True)
     videos = rp.resize_videos(videos,size=(480,720))
     videos = rp.resize_lists(videos, length=49)
 
     rp.tic()
     result = generate_dotted_latents(
-        [video],
+        videos,
         np.ones((13, 60, 90)),
         out_channels=3,
         silent=False,
@@ -263,7 +263,7 @@ def demo_dotted_latents(*video_urls):
     
     rp.display_video(
         rp.horizontally_concatenated_videos(
-            rp.resize_list(video, 13),
+            *rp.resize_lists(videos, 13),
             rp.as_numpy_images(
                 rp.torch_resize_images(
                     dotted_latent_video, size=8, interp="nearest", copy=True
