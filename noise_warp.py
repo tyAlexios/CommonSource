@@ -793,9 +793,16 @@ class NoiseWarper:
 
         return warp_xyωc(state, flow, **self.warp_kwargs)
     
-def blend_noise(noise_background, noise_foreground, alpha):
-    """ Variance-preserving blend """
-    return (noise_foreground * alpha + noise_background * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
+# def blend_noise(noise_background, noise_foreground, alpha):
+#     """ Variance-preserving blend """
+#     return (noise_foreground * alpha + noise_background * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
+
+def blend_noise(noise_foreground, noise_background, alpha):
+    # ensure alpha is a tensor broadcastable to noise shape
+    alpha = torch.tensor(alpha, dtype=noise_foreground.dtype, device=noise_foreground.device)
+    return (
+        noise_foreground * alpha + noise_background * (1 - alpha)
+    ) / torch.sqrt(alpha**2 + (1 - alpha)**2)
 
 def mix_new_noise(noise, alpha):
     """As alpha --> 1, noise is destroyed"""
